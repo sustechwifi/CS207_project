@@ -24,14 +24,7 @@ module project_impl(
     input sys_clk,
     input rx, //bind to N5 pin
     output tx, //bind to T4 pin
-    
-//  input place_barrier_signal,
-//  input destroy_barrier_signal,
-    output front_detector,
-    output back_detector,
-    output left_detector,
-    output right_detector,
-
+   
     input power_on,
     input power_off,
     input [2:0] mode,
@@ -70,6 +63,11 @@ module project_impl(
     reg [3:0] seg_7 = 4'h0;
       
     wire [7:0] LED1,LED2,LED_EN;  
+    
+    wire front_detector;
+    wire back_detector;
+    wire left_detector;
+    wire right_detector;
     
     initial begin
     state = 2'b0;
@@ -202,20 +200,6 @@ right_detector
 );
 endmodule
 
-
-
-module priority_encoder(
-input [2:0] in,
-output reg [2:0] out
-);
-always@(*)
-   casex(in)
-    3'b1xx: out = 3'b100;
-    3'b01x: out = 3'b010;
-    3'b001: out = 3'b001;
-    3'bxxx: out = 3'b000;
-   endcase
-endmodule
 
 module check_moving(
 input [3:0] state,
