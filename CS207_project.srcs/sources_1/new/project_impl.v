@@ -55,7 +55,9 @@ module project_impl(
     parameter   AUTO_DRIVING     =   4'ha;
     
     reg [31:0] cnt = 0;
-    reg [3:0] state; 
+    reg [3:0] state,next_state; 
+    wire[3:0] state_from_module;
+    
     reg flag = 1'b0;
     reg [3:0] tmp;
     
@@ -69,162 +71,115 @@ module project_impl(
     wire left_detector;
     wire right_detector;
     
+    wire signal_forward;
+    wire signal_back;
+    
     initial begin
-    state = 2'b0;
+    state = 4'b0;
+    next_state = 4'b0;
     end
     
+    //开关
     always@(posedge sys_clk or posedge power_off)
         if (power_off)
              begin
-              flag <= 1'b0;
+              state <= OFF;
               cnt <= 32'd0;
              end
         else if(power_on)
            begin
-           if(cnt > 32'd5000_0000) 
+           if(cnt > 32'd1_0000_0000 && state == OFF) 
               begin
-              flag <= 1'b1;
-              cnt <= 0;
+              state <= ON;
+              cnt <= 32'd0;
               end
            else cnt <= cnt + 32'd1;
            end
         else  begin
         cnt <= 32'd0;
-        flag <= 1'b0;
+        state <= next_state;
         end
     
+    //里程数
     always@(posedge sys_clk)
     begin
-      if(power_off) 
-            state <= OFF;
+        case(state)
+        MANUAL_DRIVING_MOVING:
+        begin
+            if(male > 32'd1_0000_0000)
+             begin
+               seg_7 <= seg_7 + 4'b0001;
+               male <= 0;
+             end
+            else male <= male + 32'd1;
+        end
+        default:male <= male;
+        endcase
+    end
+
+   
+  //状态机
+    always@(state,mode)
+    begin
        case(state)
        OFF: 
-            begin
-               male <= 0;
-               seg_7 <= 4'h0;
-            if(flag)
-                 state <= ON;
-            else state <= OFF;
+            begin          
+            next_state <= OFF;
             end
        ON :
         begin
-            if(power_off)
-                state <= OFF;
-            else if(mode == 3'b0)
-                state <= ON;
+            if(mode == 3'b0)
+                next_state <= ON;
             else 
             begin
              casex(mode)
-               3'b1xx: state <= AUTO_DRIVING;
-               3'b01x: state <= SEMI_AUTO;
-               3'b001: state <= MANUAL_DRIVING_PREPARED;
-               3'bxxx: state <= OFF;
+               3'b1xx: next_state <= AUTO_DRIVING;
+               3'b01x: next_state <= SEMI_AUTO;
+               3'b001: next_state <= MANUAL_DRIVING_PREPARED;
+               3'bxxx: next_state <= ON;
               endcase
             end
-         end
-         
-       MANUAL_DRIVING_PREPARED:
-        begin
-         tmp = {throttle,brake,clutch,reverse_gear_shift};
-         casex(tmp)
-            4'b101x:state <= MANUAL_DRIVING_STARTING;
-            4'b1x0x:state <= OFF;
-            4'bxxxx:state <= MANUAL_DRIVING_PREPARED;
-         endcase
-        end  
-        MANUAL_DRIVING_STARTING:
-        begin
-           tmp = {throttle,brake,clutch,reverse_gear_shift};
-           casex(tmp)
-             4'b100x:state <= MANUAL_DRIVING_MOVING;
-             4'b01xx:state <= MANUAL_DRIVING_PREPARED;
-             4'bxxxx:state <= MANUAL_DRIVING_STARTING;
-           endcase
-        end
-        MANUAL_DRIVING_MOVING:
-        begin
-           if(male > 32'd1_0000_0000)
-               begin
-               seg_7 <= seg_7 + 4'b0001;
-               male <= 32'd0;
-               end
-           else  male <= male + 32'd1;
-           tmp = {throttle,brake,clutch,reverse_gear_shift};
-           casex(tmp)
-                4'b01xx:state <= MANUAL_DRIVING_PREPARED;
-                4'b0001:state <= OFF;
-                4'b00xx:state <= MANUAL_DRIVING_STARTING;
-                4'b0x1x:state <= MANUAL_DRIVING_STARTING;
-                4'b1xxx:state <= MANUAL_DRIVING_MOVING;
-           endcase
-        end
-        
-       SEMI_AUTO:
-        begin
-            state <= OFF;  
-        end  
-       AUTO_DRIVING:
-          begin
-             state <= OFF;  
-          end
-       default: state <= OFF;
+         end             
+       default: next_state <= state_from_module; 
     endcase
     end
-    
-light_7seg_ego1 l1(seg_7,LED1,LED_EN);
-light_7seg_ego1 l2(seg_7,LED2,LED_EN);
-assign seg_en = LED_EN;
-assign seg_out0 = LED1;
-assign seg_out1= LED2;
-assign test = state;
-assign direction_left_light = turn_left;
-assign direction_right_light = turn_right;
 
-wire signal_forward,signal_back;
-check_moving c(state,reverse_gear_shift,signal_forward,signal_back);
+assign test = state;
+
+manual_driving manual(
+    state,
+    state_from_module,
+    throttle,
+    brake,
+    clutch,
+    reverse_gear_shift,
+    turn_left,
+    turn_right,
+    seg_en,
+    seg_out0,
+    seg_out1,
+    direction_left_light,
+    direction_right_light,
+    signal_forward,
+    signal_back
+);   
+
 
 SimulatedDevice main(
-sys_clk,
-rx,
-tx,
-turn_left,
-turn_right,
-signal_forward,
-signal_back,
-1'b0,
-1'b0,
-front_detector,
-back_detector,
-left_detector,
-right_detector
+    sys_clk,
+    rx,
+    tx,
+    turn_left,
+    turn_right,
+    signal_forward,
+    signal_back,
+    1'b0,
+    1'b0,
+    front_detector,
+    back_detector,
+    left_detector,
+    right_detector
 );
+    
 endmodule
 
-
-module check_moving(
-input [3:0] state,
-input reverse,
-output forward_signal,
-output back_signal
-);
-reg res;
-always@ *
-begin
-casex(state)
-4'b0100:res = 1'b1;
-4'bxxxx:res = 1'b0;
-endcase
-end
-assign forward_signal = res & ~reverse;
-assign back_signal = res & reverse;
-endmodule
-
-module change_direction(
-input left,right,
-output left_signal,right_signal
-);
-wire res;
-
-assign left_signal = left & ~right;
-assign right_signal = right & ~left;
-endmodule

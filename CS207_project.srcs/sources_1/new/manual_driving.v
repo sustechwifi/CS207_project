@@ -1,7 +1,6 @@
 module manual_driving(
-    input [3:0]state_input,
-    output [3:0]state_output,
-    
+    input[3:0] state,
+    output reg [3:0] next_state,
     input throttle,
     input brake,
     input clutch,
@@ -20,76 +19,70 @@ module manual_driving(
     output signal_forward,
     output signal_back
     );
-
     parameter   OFF    =   4'b0000;
-    parameter   ON     =   4'b0001;
     parameter   MANUAL_DRIVING_PREPARED     =   4'b0010;
     parameter   MANUAL_DRIVING_STARTING     =   4'b0011;
     parameter   MANUAL_DRIVING_MOVING     =   4'b0100;
-    parameter   SEMI_AUTO     =   4'h6;
-    parameter   AUTO_DRIVING     =   4'ha;
     
-    reg [3:0] tmp;
-    reg [31:0] male = 0;
     reg [3:0] seg_7 = 4'h0;
-      
+    reg [3:0] tmp;
     wire [7:0] LED1,LED2,LED_EN;  
     
-    reg [3:0]state;
-    initial begin
-    state = state_input;
-    end
-    
-    always@(state)
-    begin
-       case(state)
-       MANUAL_DRIVING_PREPARED:
-        begin
-         tmp = {throttle,brake,clutch,reverse_gear_shift};
-         casex(tmp)
-            4'b101x:state <= MANUAL_DRIVING_STARTING;
-            4'b1x0x:state <= OFF;
-            4'bxxxx:state <= MANUAL_DRIVING_PREPARED;
-         endcase
-        end  
-        MANUAL_DRIVING_STARTING:
-        begin
-           tmp = {throttle,brake,clutch,reverse_gear_shift};
-           casex(tmp)
-             4'b100x:state <= MANUAL_DRIVING_MOVING;
-             4'b01xx:state <= MANUAL_DRIVING_PREPARED;
-             4'bxxxx:state <= MANUAL_DRIVING_STARTING;
-           endcase
-        end
-        MANUAL_DRIVING_MOVING:
-        begin
-           if(male > 32'd1_0000_0000)
-               begin
-               seg_7 <= seg_7 + 4'b0001;
-               male <= 32'd0;
-               end
-           else  male <= male + 32'd1;
-           tmp = {throttle,brake,clutch,reverse_gear_shift};
-           casex(tmp)
-                4'b01xx:state <= MANUAL_DRIVING_PREPARED;
-                4'b0001:state <= OFF;
-                4'b00xx:state <= MANUAL_DRIVING_STARTING;
-                4'b0x1x:state <= MANUAL_DRIVING_STARTING;
-                4'b1xxx:state <= MANUAL_DRIVING_MOVING;
-           endcase
-        end
-       default: state <= OFF;
-    endcase
-    end
     
 light_7seg_ego1 l1(seg_7,LED1,LED_EN);
 light_7seg_ego1 l2(seg_7,LED2,LED_EN);
-check_moving c(state,reverse_gear_shift,signal_forward,signal_back);
+reg res;
 
+always@(state)
+    begin
+       case(state)
+     MANUAL_DRIVING_PREPARED:
+          begin
+              tmp = {throttle,brake,clutch,reverse_gear_shift};
+              res = 1'b0;
+              casex(tmp)
+               4'b101x:next_state <= MANUAL_DRIVING_STARTING;
+               4'b1x0x:next_state <= OFF;
+               4'bxxxx:next_state <= MANUAL_DRIVING_PREPARED;
+              endcase
+              end  
+      MANUAL_DRIVING_STARTING:
+          begin
+              tmp = {throttle,brake,clutch,reverse_gear_shift};
+              res = 1'b0;
+                casex(tmp)
+                  4'b100x:next_state <= MANUAL_DRIVING_MOVING;
+                  4'b01xx:next_state <= MANUAL_DRIVING_PREPARED;
+                  4'bxxxx:next_state <= MANUAL_DRIVING_STARTING;
+                 endcase
+          end
+       MANUAL_DRIVING_MOVING:
+           begin
+              tmp = {throttle,brake,clutch,reverse_gear_shift};
+              res = 1'b1;
+              casex(tmp)
+               4'b01xx:next_state <= MANUAL_DRIVING_PREPARED;
+               4'b0001:next_state <= OFF;
+               4'b00xx:next_state <= MANUAL_DRIVING_STARTING;
+               4'b0x1x:next_state <= MANUAL_DRIVING_STARTING;
+               4'b1xxx:next_state <= MANUAL_DRIVING_MOVING;
+              endcase
+          end               
+       default: 
+       begin
+       res = 1'b0;
+       next_state <= state; 
+       end
+    endcase
+    end
+
+assign signal_forward = res & ~reverse_gear_shift;
+assign signal_back = res & reverse_gear_shift;
 assign seg_en = LED_EN;
 assign seg_out0 = LED1;
 assign seg_out1= LED2;
-assign direction_left_light = turn_left;
-assign direction_right_light = turn_right;
-assign state_output = state;
+assign direction_left_light = turn_left & ~turn_right;
+assign direction_right_light = turn_right & ~turn_left;
 endmodule
+
+
