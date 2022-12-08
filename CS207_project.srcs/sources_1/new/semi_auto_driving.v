@@ -36,11 +36,13 @@ input right_detector
        //...
     
     always@(state)begin
-    if(state < 4'h5 || state > 4'h9)state_output <= state;
+    if(state < 4'h5 || state > 4'h9)
+        state_output <= state;
     else begin
         casex(state)
         //TODO fill something
         //.....
+        default state_output <= state; 
         endcase
         end
     end

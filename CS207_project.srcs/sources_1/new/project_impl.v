@@ -38,6 +38,8 @@ module project_impl(
     input turn_left,
     input turn_right,
     
+    input destroy_barrier,
+    
     output [7:0] seg_en,
     output [7:0] seg_out0,
     output [7:0] seg_out1,
@@ -84,6 +86,16 @@ module project_impl(
     wire[3:0] control_signal_from_semi_auto;
     wire[3:0] control_signal_from_auto;
     
+    reg place_barrier_signal;
+    reg destroy_barrier_signal;
+    wire place_barrier_signal_from_auto;
+    wire destroy_barrier_signal_from_auto;
+    
+    reg [1:0]left_cnt;
+    reg [1:0]right_cnt;
+    wire [1:0] left_cnt_next;
+    wire [1:0] right_cnt_next;
+    
     //TODO any other parameters for semi auto
     //...
      
@@ -113,7 +125,7 @@ module project_impl(
         state <= next_state;
         end
     
-    
+    //auto driving cnt
     always@(posedge sys_clk)
     begin
         casex(state)
@@ -150,11 +162,15 @@ module project_impl(
   //×´Ì¬»ú
     always@(state,mode)
     begin
-       case(state)
+       casex(state)
        OFF: 
             begin          
             next_state <= OFF;
             control_signal <= 4'b0000;
+            place_barrier_signal <= 1'b0;
+            destroy_barrier_signal <= 1'b0;
+            left_cnt <= 2'b0;
+            right_cnt <= 2'b0;
             end
        ON :
         begin
@@ -170,20 +186,25 @@ module project_impl(
               endcase
             end
          end
-       MANUAL_DRIVING_PREPARED :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
-       MANUAL_DRIVING_STARTING :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
-       MANUAL_DRIVING_MOVING   :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
-       
+       MANUAL_DRIVING_PREPARED, MANUAL_DRIVING_STARTING, MANUAL_DRIVING_MOVING :   
+       begin 
+            next_state <= state_from_manual; 
+            control_signal <= control_signal_from_manual;
+       end
+      
        SEMI_AUTO: begin next_state <= state_from_semi_auto; control_signal <= control_signal_from_semi_auto;end
        //TODO other state in semi auto
        //SEMI_AUTO_{YOUR_STATE1}: begin next_state <= state_from_semi_auto; control_signal <= control_signal_from_semi_auto;end
-         
-       AUTO_DRIVING     :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
-       AUTO_FORWARD     :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
-       AUTO_TURN_LEFT   :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
-       AUTO_TURN_RIGHT  :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
-       AUTO_TURN_BACK   :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
-         
+       
+       AUTO_DRIVING, AUTO_FORWARD, AUTO_TURN_LEFT, AUTO_TURN_RIGHT, AUTO_TURN_BACK:
+       begin
+            next_state <=  state_from_auto; 
+            control_signal <= control_signal_from_auto;
+            place_barrier_signal <= place_barrier_signal_from_auto;
+            destroy_barrier_signal <=  destroy_barrier_signal_from_auto | destroy_barrier;   
+            left_cnt <= left_cnt_next;
+            right_cnt <= right_cnt_next;
+       end  
        default: next_state <= OFF; 
     endcase
     end
@@ -211,8 +232,17 @@ manual_driving manual(
 auto_driving auto(
     auto_cnt,
     state,
-    state_from_semi_auto,
+    state_from_auto,
     control_signal_from_auto,
+    
+    place_barrier_signal,
+    destroy_barrier_signal,
+    place_barrier_signal_from_auto,
+    destroy_barrier_signal_from_auto,
+    left_cnt,
+    right_cnt,
+    left_cnt_next,
+    right_cnt_next,    
         
     front_detector,
     back_detector,
@@ -224,7 +254,7 @@ semi_auto_driving semi(
    //TODO any other parameters if needed;
    //... 
     state,
-    state_from_auto,
+    state_from_semi_auto,
     control_signal_from_semi_auto,
         
     front_detector,
@@ -242,8 +272,8 @@ SimulatedDevice main(
     control_signal[0],  //ÓÒ
     control_signal[3],  //Ç°
     control_signal[2],  //ºó
-    1'b0,
-    1'b0,
+    place_barrier_signal,
+    destroy_barrier_signal,
     front_detector,
     left_detector,
     right_detector,

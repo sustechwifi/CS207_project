@@ -22,6 +22,10 @@ set_property IOSTANDARD LVCMOS33 [get_ports {mode[2]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {mode[1]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {mode[0]}]
 
+#input for barrier
+set_property PACKAGE_PIN P5 [get_ports destroy_barrier]
+set_property IOSTANDARD LVCMOS33 [get_ports destroy_barrier]
+
 #output for test state
 set_property PACKAGE_PIN F6 [get_ports {test[3]}]
 set_property PACKAGE_PIN G4 [get_ports {test[2]}]
