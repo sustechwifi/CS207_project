@@ -43,7 +43,11 @@ module project_impl(
     output [7:0] seg_out1,
     
     output direction_left_light,
-    output direction_right_light
+    output direction_right_light,
+    output front_detector,
+    output back_detector,
+    output left_detector,
+    output right_detector
     );
 
     parameter   OFF    =   4'b0000;
@@ -51,12 +55,21 @@ module project_impl(
     parameter   MANUAL_DRIVING_PREPARED     =   4'b0010;
     parameter   MANUAL_DRIVING_STARTING     =   4'b0011;
     parameter   MANUAL_DRIVING_MOVING     =   4'b0100;
-    parameter   SEMI_AUTO     =   4'h6;
-    parameter   AUTO_DRIVING     =   4'ha;
+    parameter   SEMI_AUTO     =   4'b0101;
+    //TODO other states in semi auto  5-9
+    //...
     
-    reg [31:0] cnt = 0;
+    parameter   AUTO_DRIVING     =   4'b1010;
+    parameter   AUTO_FORWARD     =   4'b1011;
+    parameter   AUTO_TURN_LEFT   =   4'b1100;
+    parameter   AUTO_TURN_RIGHT  =   4'b1101;
+    parameter   AUTO_TURN_BACK   =   4'b1110;
+    
+    reg [31:0] cnt = 0,auto_cnt = 0;
     reg [3:0] state,next_state; 
-    wire[3:0] state_from_module;
+    wire[3:0] state_from_manual;
+    wire[3:0] state_from_semi_auto;
+    wire[3:0] state_from_auto;
     
     reg flag = 1'b0;
     reg [3:0] tmp;
@@ -66,14 +79,14 @@ module project_impl(
       
     wire [7:0] LED1,LED2,LED_EN;  
     
-    wire front_detector;
-    wire back_detector;
-    wire left_detector;
-    wire right_detector;
+    reg [3:0] control_signal;
+    wire[3:0] control_signal_from_manual;
+    wire[3:0] control_signal_from_semi_auto;
+    wire[3:0] control_signal_from_auto;
     
-    wire signal_forward;
-    wire signal_back;
-    
+    //TODO any other parameters for semi auto
+    //...
+     
     initial begin
     state = 4'b0;
     next_state = 4'b0;
@@ -100,22 +113,38 @@ module project_impl(
         state <= next_state;
         end
     
-    //里程数
+    
     always@(posedge sys_clk)
     begin
-        case(state)
-        MANUAL_DRIVING_MOVING:
+        casex(state)
+        4'b11xx:
         begin
-            if(male > 32'd1_0000_0000)
+            if(auto_cnt > 32'd2_0000_0000)
              begin
-               seg_7 <= seg_7 + 4'b0001;
-               male <= 0;
+               auto_cnt <= 0;
              end
-            else male <= male + 32'd1;
+            else auto_cnt <= auto_cnt + 32'd1;
         end
-        default:male <= male;
+        default:auto_cnt <= 0;
         endcase
     end
+    
+    //里程数
+    always@(posedge sys_clk)
+        begin
+            case(state)
+            MANUAL_DRIVING_MOVING:
+            begin
+                if(male > 32'd1_0000_0000)
+                 begin
+                   seg_7 <= seg_7 + 4'b0001;
+                   male <= 0;
+                 end
+                else male <= male + 32'd1;
+            end
+            default:male <= male;
+            endcase
+        end
 
    
   //状态机
@@ -125,6 +154,7 @@ module project_impl(
        OFF: 
             begin          
             next_state <= OFF;
+            control_signal <= 4'b0000;
             end
        ON :
         begin
@@ -133,14 +163,28 @@ module project_impl(
             else 
             begin
              casex(mode)
-               3'b1xx: next_state <= AUTO_DRIVING;
+               3'b1xx: next_state <= AUTO_FORWARD;
                3'b01x: next_state <= SEMI_AUTO;
                3'b001: next_state <= MANUAL_DRIVING_PREPARED;
                3'bxxx: next_state <= ON;
               endcase
             end
-         end             
-       default: next_state <= state_from_module; 
+         end
+       MANUAL_DRIVING_PREPARED :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
+       MANUAL_DRIVING_STARTING :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
+       MANUAL_DRIVING_MOVING   :   begin next_state <= state_from_manual; control_signal <= control_signal_from_manual;end
+       
+       SEMI_AUTO: begin next_state <= state_from_semi_auto; control_signal <= control_signal_from_semi_auto;end
+       //TODO other state in semi auto
+       //SEMI_AUTO_{YOUR_STATE1}: begin next_state <= state_from_semi_auto; control_signal <= control_signal_from_semi_auto;end
+         
+       AUTO_DRIVING     :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
+       AUTO_FORWARD     :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
+       AUTO_TURN_LEFT   :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
+       AUTO_TURN_RIGHT  :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
+       AUTO_TURN_BACK   :  begin next_state <=  state_from_auto; control_signal <= control_signal_from_auto; end
+         
+       default: next_state <= OFF; 
     endcase
     end
 
@@ -148,7 +192,8 @@ assign test = state;
 
 manual_driving manual(
     state,
-    state_from_module,
+    state_from_manual,
+    control_signal_from_manual,
     throttle,
     brake,
     clutch,
@@ -159,26 +204,50 @@ manual_driving manual(
     seg_out0,
     seg_out1,
     direction_left_light,
-    direction_right_light,
-    signal_forward,
-    signal_back
+    direction_right_light
 );   
+
+
+auto_driving auto(
+    auto_cnt,
+    state,
+    state_from_semi_auto,
+    control_signal_from_auto,
+        
+    front_detector,
+    back_detector,
+    left_detector,
+    right_detector
+);
+
+semi_auto_driving semi(
+   //TODO any other parameters if needed;
+   //... 
+    state,
+    state_from_auto,
+    control_signal_from_semi_auto,
+        
+    front_detector,
+    back_detector,
+    left_detector,
+    right_detector
+);
 
 
 SimulatedDevice main(
     sys_clk,
     rx,
     tx,
-    turn_left,
-    turn_right,
-    signal_forward,
-    signal_back,
+    control_signal[1],  //左
+    control_signal[0],  //右
+    control_signal[3],  //前
+    control_signal[2],  //后
     1'b0,
     1'b0,
     front_detector,
-    back_detector,
     left_detector,
-    right_detector
+    right_detector,
+    back_detector
 );
     
 endmodule

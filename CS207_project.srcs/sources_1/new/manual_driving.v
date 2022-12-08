@@ -1,6 +1,8 @@
 module manual_driving(
     input[3:0] state,
     output reg [3:0] next_state,
+    output [3:0] control_output,
+    
     input throttle,
     input brake,
     input clutch,
@@ -14,10 +16,7 @@ module manual_driving(
     output [7:0] seg_out1,
     
     output direction_left_light,
-    output direction_right_light,
-    
-    output signal_forward,
-    output signal_back
+    output direction_right_light
     );
     parameter   OFF    =   4'b0000;
     parameter   MANUAL_DRIVING_PREPARED     =   4'b0010;
@@ -76,13 +75,12 @@ always@(state)
     endcase
     end
 
-assign signal_forward = res & ~reverse_gear_shift;
-assign signal_back = res & reverse_gear_shift;
 assign seg_en = LED_EN;
 assign seg_out0 = LED1;
 assign seg_out1= LED2;
 assign direction_left_light = turn_left & ~turn_right;
 assign direction_right_light = turn_right & ~turn_left;
+assign control_output = {res & ~reverse_gear_shift,res & reverse_gear_shift,turn_left,turn_right};
 endmodule
 
 
