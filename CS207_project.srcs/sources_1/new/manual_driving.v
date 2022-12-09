@@ -11,10 +11,6 @@ module manual_driving(
     input turn_left,
     input turn_right,
     
-    output [7:0] seg_en,
-    output [7:0] seg_out0,
-    output [7:0] seg_out1,
-    
     output direction_left_light,
     output direction_right_light
     );
@@ -23,14 +19,9 @@ module manual_driving(
     parameter   MANUAL_DRIVING_STARTING     =   4'b0011;
     parameter   MANUAL_DRIVING_MOVING     =   4'b0100;
     
-    reg [3:0] seg_7 = 4'h0;
+
     reg [3:0] tmp;
-    wire [7:0] LED1,LED2,LED_EN;  
-    
-    
-light_7seg_ego1 l1(seg_7,LED1,LED_EN);
-light_7seg_ego1 l2(seg_7,LED2,LED_EN);
-reg res;
+    reg res;
 
 always@(state)
     begin
@@ -75,9 +66,6 @@ always@(state)
     endcase
     end
 
-assign seg_en = LED_EN;
-assign seg_out0 = LED1;
-assign seg_out1= LED2;
 assign direction_left_light = turn_left & ~turn_right;
 assign direction_right_light = turn_right & ~turn_left;
 assign control_output = {res & ~reverse_gear_shift,res & reverse_gear_shift,turn_left,turn_right};

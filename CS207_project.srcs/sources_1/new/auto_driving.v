@@ -26,8 +26,6 @@ input [3:0]state,
 output reg [3:0] state_output,
 output [3:0] control_signal_output,
 
-input place_barrier_signal,
-input destroy_barrier_signal,
 output reg place_barrier_ouput,
 output reg destroy_barrier_ouput,
 
@@ -50,14 +48,16 @@ input right_detector
         reg [3:0] next_state;
         reg [3:0] res;
         
+        initial begin
+            place_barrier_ouput <= 1'b0;
+            destroy_barrier_ouput <= 1'b0;
+             res <= 4'b0000;
+        end
+        
         always@(state)begin
-        place_barrier_ouput <= place_barrier_signal;
-        destroy_barrier_ouput <= destroy_barrier_signal;
              case(state)
              AUTO_DRIVING:
                 begin
-                  //TODO
-                  res <= 4'b0000;
                   state_output <= next_state;
                 end
              AUTO_FORWARD:
@@ -109,7 +109,7 @@ input right_detector
                            place_barrier_ouput <= 1'b0;
                          end
                         else begin
-                           res <= 4'b0001;
+                           res <= 4'b0010;
                            state_output <= AUTO_TURN_BACK;
                          end
                       end

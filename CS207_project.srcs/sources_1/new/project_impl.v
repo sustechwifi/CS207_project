@@ -73,13 +73,9 @@ module project_impl(
     wire[3:0] state_from_semi_auto;
     wire[3:0] state_from_auto;
     
-    reg flag = 1'b0;
-    reg [3:0] tmp;
-    
-    reg [31:0] male = 0;
-    reg [3:0] seg_7 = 4'h0;
+    reg [31:0] male;
+    reg [3:0] seg_7;
       
-    wire [7:0] LED1,LED2,LED_EN;  
     
     reg [3:0] control_signal;
     wire[3:0] control_signal_from_manual;
@@ -100,8 +96,16 @@ module project_impl(
     //...
      
     initial begin
-    state = 4'b0;
-    next_state = 4'b0;
+    male = 32'd0;
+    seg_7 = 4'b0000;
+    state = 4'b0000;
+    next_state = 4'b0000;
+    cnt <= 32'd0;
+    left_cnt <= 2'd0;
+    right_cnt <= 2'd0;
+    auto_cnt <= 32'd0;
+    place_barrier_signal <= 1'b0;
+    destroy_barrier_signal <= 1'b0;
     end
     
     //¿ª¹Ø
@@ -133,11 +137,11 @@ module project_impl(
         begin
             if(auto_cnt > 32'd2_0000_0000)
              begin
-               auto_cnt <= 0;
+               auto_cnt <= 32'd0;
              end
             else auto_cnt <= auto_cnt + 32'd1;
         end
-        default:auto_cnt <= 0;
+        default:auto_cnt <= 32'd0;
         endcase
     end
     
@@ -150,11 +154,11 @@ module project_impl(
                 if(male > 32'd1_0000_0000)
                  begin
                    seg_7 <= seg_7 + 4'b0001;
-                   male <= 0;
+                   male <= 32'd0;
                  end
                 else male <= male + 32'd1;
             end
-            default:male <= male;
+            default:male <= 32'd0;
             endcase
         end
 
@@ -167,8 +171,6 @@ module project_impl(
             begin          
             next_state <= OFF;
             control_signal <= 4'b0000;
-            place_barrier_signal <= 1'b0;
-            destroy_barrier_signal <= 1'b0;
             left_cnt <= 2'b0;
             right_cnt <= 2'b0;
             end
@@ -210,6 +212,8 @@ module project_impl(
     end
 
 assign test = state;
+light_7seg_ego1 l1(seg_7,seg_out0,seg_en);
+light_7seg_ego1 l2(seg_7,seg_out1,seg_en);
 
 manual_driving manual(
     state,
@@ -221,9 +225,6 @@ manual_driving manual(
     reverse_gear_shift,
     turn_left,
     turn_right,
-    seg_en,
-    seg_out0,
-    seg_out1,
     direction_left_light,
     direction_right_light
 );   
@@ -234,9 +235,7 @@ auto_driving auto(
     state,
     state_from_auto,
     control_signal_from_auto,
-    
-    place_barrier_signal,
-    destroy_barrier_signal,
+
     place_barrier_signal_from_auto,
     destroy_barrier_signal_from_auto,
     left_cnt,
