@@ -2,10 +2,8 @@
 
 ## Project: Smart car simulating
 
----
-
-- 游俊涛 12110919 : Manual Driving & Auto Driving
-- 陶文晖 12111744 : Semi Driving & Auto Driving
+- 游俊涛 12110919 : Manual Driving & Auto Driving & Structure design
+- 陶文晖 12111744 : Semi Driving & Auto Driving & VGA
 
 **[Source code](https://github.com/sustechwifi/CS207_project)**
 
@@ -15,15 +13,26 @@ https://github.com/sustechwifi/CS207_project
 
 ---
 
-## Part 0. 结构设计
+## Part 1. Overview
 
-- 顶层模块定义
+project_impl.v  (top module)
+
+> Pins & Variables
+> 
+> State table & machine
+> 
+> Sub modules
+---
+
+### Pins & Variables
+
+- Module definition
 
 ```
 module project_impl(
     input sys_clk,
     input rx, 
-    output tx, 
+    output tx,
     input power_on,
     input power_off,
     input [2:0] mode,
@@ -34,65 +43,66 @@ module project_impl(
     input reverse_gear_shift,
     input turn_left,
     input turn_right,
-    input destroy_barrier,
-    output [7:0] seg_en,
+    input go_strait,
+    output reg [7:0] seg_en,
     output [7:0] seg_out0,
     output [7:0] seg_out1,
     output direction_left_light,
-    output direction_right_light,
-    output front_detector,
-    output back_detector,
-    output left_detector,
-    output right_detector
+    output direction_right_light
 );
 ```
 
-- Inner variable
+- Inner variables
 
-```
-    reg [31:0] cnt = 0,auto_cnt = 0;
+    + States control and power-signal counter
+    ```
+    reg [31:0] cnt = 0;
     reg [3:0] state,next_state; 
     wire[3:0] state_from_manual;
     wire[3:0] state_from_semi_auto;
     wire[3:0] state_from_auto;
-    
+    ```
+
+    + Mileages counter
+
+    ```
+    parameter period = 250000; //400Hz
     reg [31:0] male;
     reg [3:0] seg_7;
-      
-    
+    reg clkout;
+    reg [2:0] scan_cnt;
+    reg [31:0] tim;
+    reg [31:0] male_cnt;
+    ```
+
+    + Control signals from automatic state machine
+
+    ```
     reg [3:0] control_signal;
     wire[3:0] control_signal_from_manual;
     wire[3:0] control_signal_from_semi_auto;
     wire[3:0] control_signal_from_auto;
-    
+    wire front_detector,back_detector,left_detector,right_detector;
     reg place_barrier_signal;
     reg destroy_barrier_signal;
     wire place_barrier_signal_from_auto;
     wire destroy_barrier_signal_from_auto;
-    
-    reg [1:0]left_cnt;
-    reg [1:0]right_cnt;
-    wire [1:0] left_cnt_next;
-    wire [1:0] right_cnt_next;
-```
+    ```
 
-- State Table
+### State table
 
-| 参数名                     | state code | 描述    |
-|-------------------------|------------|-------|
-| OFF                     | 4'b0000    | 未启动   |
-| ON                      | 4'b0001    | 已启动   |
-| MANUAL_DRIVING_PREPARED | 4'b0010    | 手动挡空挡 |
-| MANUAL_DRIVING_STARTING | 4’b0011    | 手动挡就绪 |
-| MANUAL_DRIVING_MOVING   | 4'b0100    | 手动挡行驶中 |
-| SEMI_AUTO               | 4'b0101    | 半自动就绪 |
-| AUTO_DRIVING            | 4'ha       | 全自动就绪 |
-| AUTO_FORWARD            | 4'hb       | 全自动行驶中 |
-| AUTO_TURN_LEFT          | 4'hc       | 全自动左转 |
-| AUTO_TURN_RIGHT         | 4'hd       | 全自动右转 |
-| AUTO_TURN_BACK          | 4'he       | 全自动掉头 |
+| Parameter Name          | state code | description        |
+|-------------------------|------------|--------------------|
+| OFF                     | 4'b0000    | Power-off          |
+| ON                      | 4'b0001    | Power-on           |
+| MANUAL_DRIVING_PREPARED | 4'b0010    | Manual Neutral     |
+| MANUAL_DRIVING_STARTING | 4’b0011    | Manual start       |
+| MANUAL_DRIVING_MOVING   | 4'b0100    | Moving             |
+| SEMI_AUTO               | 4'b0101    | Semi-auto start    |
+| AUTO_DRIVING            | 4'ha       | Auto-driving start |
 
-- 状态机
+
+### State machine
 
 ```
 always@(state,mode)
@@ -102,8 +112,6 @@ always@(state,mode)
             begin          
             next_state <= OFF;
             control_signal <= 4'b0000;
-            left_cnt <= 2'b0;
-            right_cnt <= 2'b0;
             end
        ON :
         begin
@@ -112,35 +120,39 @@ always@(state,mode)
             else 
             begin
              casex(mode)
-               3'b1xx: next_state <= AUTO_FORWARD;
+               3'b1xx: next_state <= AUTO_DRIVING;
                3'b01x: next_state <= SEMI_AUTO;
                3'b001: next_state <= MANUAL_DRIVING_PREPARED;
                3'bxxx: next_state <= ON;
               endcase
             end
          end
-       MANUAL_DRIVING_PREPARED, MANUAL_DRIVING_STARTING, MANUAL_DRIVING_MOVING :   
+         
+   MANUAL_DRIVING_PREPARED, MANUAL_DRIVING_STARTING, MANUAL_DRIVING_MOVING :   
        begin 
             next_state <= state_from_manual; 
             control_signal <= control_signal_from_manual;
        end
       
-       SEMI_AUTO: begin next_state <= state_from_semi_auto; control_signal <= control_signal_from_semi_auto;end
-       
-       AUTO_DRIVING, AUTO_FORWARD, AUTO_TURN_LEFT, AUTO_TURN_RIGHT, AUTO_TURN_BACK:
+   SEMI_AUTO: 
+       begin 
+            next_state <= state_from_semi_auto; 
+            control_signal <= control_signal_from_semi_auto;
+       end
+      
+   AUTO_DRIVING:
        begin
             next_state <=  state_from_auto; 
             control_signal <= control_signal_from_auto;
             place_barrier_signal <= place_barrier_signal_from_auto;
-            destroy_barrier_signal <=  destroy_barrier_signal_from_auto | destroy_barrier;   
-            left_cnt <= left_cnt_next; right_cnt <= right_cnt_next;
+            destroy_barrier_signal <=  destroy_barrier_signal_from_auto;  
        end  
        default: next_state <= OFF; 
     endcase
-    end
+end
 ```
 
-- 结构化设计
+### Sub modules
 
 ```
 manual_driving manual(
@@ -157,26 +169,6 @@ manual_driving manual(
     direction_right_light
 );   
 
-
-auto_driving auto(
-    auto_cnt,
-    state,
-    state_from_auto,
-    control_signal_from_auto,
-
-    place_barrier_signal_from_auto,
-    destroy_barrier_signal_from_auto,
-    left_cnt,
-    right_cnt,
-    left_cnt_next,
-    right_cnt_next,    
-        
-    front_detector,
-    back_detector,
-    left_detector,
-    right_detector
-);
-
 semi_auto_driving semi(
    sys_clk, 
    front_detector,
@@ -184,47 +176,60 @@ semi_auto_driving semi(
    left_detector,
    right_detector, 
    go_strait,
-   turn_left,
-   turn_right,
+   turn_left,turn_right,
    state_from_semi_auto,
    control_signal_from_semi_auto
 );
 
-
-SimulatedDevice main(
-    sys_clk,
-    rx,
-    tx,
-    control_signal[1],  //左
-    control_signal[0],  //右
-    control_signal[3],  //前
-    control_signal[2],  //后
-    place_barrier_signal,
-    destroy_barrier_signal,
-    front_detector,
-    left_detector,
-    right_detector,
-    back_detector
+auto_driving auto(
+  sys_clk, 
+  front_detector,
+  back_detector,
+  left_detector,
+  right_detector,
+  control_signal_from_auto,
+  place_barrier_signal_from_auto,
+  destroy_barrier_signal_from_auto,
+  state_from_auto
 );
-    
+
+SimulatedDevice utrl(
+ //...
+);
 endmodule
 ```
 
 ---
 
-## Part 1. Manual Driving
+## Part 1. Power & Manual Driving
 
-- Power-on and Power-off (button)
-- Throttle, Clutch, Brake (switch)
-- Turning, Mileage (LED, seg-tubes)
+project_impl.v &  manual_driving.v
 
-### 1.Power control 
-- On & Off
+> Power-on and Power-off (button)
+> 
+> Throttle, Clutch, Brake (switch)
+> 
+> Turning, Mileage (LED, seg-tubes)
+
+### States used
+
+
+| Parameter Name          | state code | description        |
+|-------------------------|------------|--------------------|
+| OFF                     | 4'b0000    | Power-off          |
+| ON                      | 4'b0001    | Power-on           |
+| MANUAL_DRIVING_PREPARED | 4'b0010    | Manual Neutral     |
+| MANUAL_DRIVING_STARTING | 4’b0011    | Manual start       |
+| MANUAL_DRIVING_MOVING   | 4'b0100    | Moving             |
+
+### Power control 
+
+- Defined in `top module`.
 
  Use counter `reg [31:0] cnt` to record single second.
  In this part, state will be updated by `next_state` or clear to `OFF`.
- 
-(sequential logic)
+
+(Sequential logic)
 ```
 always@(posedge sys_clk or posedge power_off)
     if (power_off)
@@ -247,33 +252,9 @@ always@(posedge sys_clk or posedge power_off)
 end
 ```
 
-### 2. Mileage record
-- Store mileage when moving.
+### Throttle, Clutch, Brake control
 
-If current state is `MANUAL_DRIVING_MOVING`, mileage variable `reg [32:0] mile` will increase each period.
-`seg_7` will update in each second, which refer the signal of seg-tubes in EGO1.
-
-(sequential logic)
-```
- always@(posedge sys_clk)
-    begin
-        case(state)
-        MANUAL_DRIVING_MOVING:
-        begin
-            if(mile > 32'd1_0000_0000)
-             begin
-               seg_7 <= seg_7 + 4'b0001;
-               mile <= 32'd0;
-             end
-            else mile <= mile + 32'd1;
-        end
-        default:mile <= 32'd0;
-        endcase
-    end
-```
-
-### 3. Throttle, Clutch, Brake switch
-- Defined in module `manual_driving`. 
+- Defined in module `manual_driving`.
 
 Input the current `state` with control signal and output `next_state`.
 Finite state machine implemented below.
@@ -324,11 +305,94 @@ always@(state)
     end
 ```
 
-- Car behavior output. 
+### Mileage record
 
-In this part, Gate-level circuits is used to
-update `direction_left_light` and `direction_right_light`,which connect in LED signal. And
-  `wire [3:0] control_output` is used for URAT module control.
+- Defined in top module.
+
+If current state is `MANUAL_DRIVING_MOVING`, mileage variable `reg [32:0] mile` will increase each period.
+`seg_7` will update in each second, which refer the signal of seg-tubes in EGO1.
+
+(Sequential logic)
+```
+always@(posedge sys_clk, negedge rx)
+    begin
+        if(~rx)
+        begin
+           male <= 0;
+           clkout <= 0;
+        end
+        else 
+          begin
+            case(state)
+        MANUAL_DRIVING_MOVING:
+        begin
+            if(male == (period>>1)-1)
+               begin
+                    clkout <= ~ clkout;
+                    male <= 0;
+               end
+             else if(male_cnt > 32'd1_0000_0000)
+                begin
+                    male_cnt <= 0;
+                    tim <= tim + 1;
+                end
+             else 
+                begin
+                    male <= male + 1;
+                    male_cnt <= male_cnt + 1;
+                end
+        end
+        default:
+            begin
+                male <= 32'd0;
+                tim <= 0;
+                male_cnt <= 0;
+            end
+        endcase
+        end
+    end
+
+always @(posedge clkout,negedge rx)
+    begin
+        if(~rx)
+            scan_cnt <= 0;
+        else 
+            begin
+            if(scan_cnt == 3'd7)
+                scan_cnt <= 0;
+            else
+                scan_cnt <= scan_cnt + 3'd1;
+        end
+    end
+   
+reg [7:0]num;
+   
+always @(scan_cnt)
+   begin
+        case(scan_cnt)
+           3'b000: begin seg_en = 8'h01; num = tim ;      end
+           3'b001: begin seg_en = 8'h02; num = tim >> 4;  end
+           3'b010: begin seg_en = 8'h04; num = tim >> 8;  end
+           3'b011: begin seg_en = 8'h08; num = tim >> 12; end
+           3'b100: begin seg_en = 8'h10; num = tim >> 16; end
+           3'b101: begin seg_en = 8'h20; num = tim >> 20; end
+           3'b110: begin seg_en = 8'h40; num = tim >> 24; end
+           3'b111: begin seg_en = 8'h80; num = tim >> 28; end
+            default : seg_en = 8'h00;
+        endcase
+end
+
+wire [7:0] useless_seg_en0, useless_seg_en1;
+light_7seg_ego1 l1({1'b0,num},seg_out0,useless_seg_en0);
+light_7seg_ego1 l2({1'b0,num},seg_out1,useless_seg_en1);
+```
+
+
+### Direction control
+
+- Defined in module `manual_driving`
+
+In this part, gate-level circuits is used to update `direction_left_light` and `direction_right_light`,which connect in LED signal. And `wire [3:0] control_output` is used for `URAT` module controlling.
 
 (Combinatorial logic)
 
@@ -338,25 +402,203 @@ assign direction_right_light = turn_right & ~turn_left;
 assign control_output = {res & ~reverse_gear_shift,res & reverse_gear_shift,turn_left,turn_right};
 ```
 
+
+## Part 2: Semi-auto driving
+
+semi_auto_driving.v
+
+> State detect
+> 
+> Semi-auto driving command (multi button)
+
 ---
-## Part 2 Semi-auto driving
+
+- States used
+
+| Parameter Name  | state code | description                                      |
+|-----------------|------------|--------------------------------------------------|
+| WAIT            | 3'b000     | Waiting for choose direction.                    |
+| CHECK           | 3'b001     | Open detector when moving                        |
+| CLOSE_DETECT    | 3'b010     | Close detector until made choice.                |                           |
+| COUNT           | 3'b100     | Keep counting when turning.                      |
+| DOUBLECOUNT     | 3'b111     | Keep counting when turning twice.                |
+| DECIDE          | 3'b011     | When turning left/right, keep going for a while. |
+| THINK           | 3'b110     | Stop for a while when auto-turning.              |
+| SEMI_AUTO       | 4'b0101    | Semi-auto driving prepared.                      |
+
+- Details
+
+When car keeps moving, its state will be `CHECK`.
+
+When surroundings has change: Using detectors' signal from 4 directions `{front_detector,back_detector,left_detector,right_detector}` , it will switch state into `WAIT` in crossing, or `THINK` with auto-turning into corresponding direction at corner.
+For example, when the 4 bits signal is `4'b0011` ,which means that the car should keep moving.
+
+After user choose direction, it will switch state into `COUNT` or `DOUBLECOUNT`.
+
+When turning, the detector will be closed with its state stay in  `COUNT` or `DOUBLECOUNT`.
+
+Keep turning with enough time, it will switch state into `CHECK` again and open its detector.
+
+(Sequential logic)
+```
+always@(posedge sys_clk)
+    begin case(state)
+    CHECK:
+      case({front_detector,back_detector,left_detector,right_detector})
+        4'b0011,4'b0111: move<=3'b100;
+        4'b1001,4'b1101, 4'b1011, 4'b1010,4'b1110: begin move<=3'b000; state<=THINK;end
+      default: begin state<=WAIT; move<=3'b000; end
+      endcase
+      
+    CLOSE_DETECT:
+      if(cnt<LAST) begin move<=3'b100; cnt<=cnt+32'd1; end
+      else begin cnt<=32'd0; state<=CHECK;end
+      
+    COUNT:
+      if(cnt<TURN) cnt<=cnt+32'd1;
+      else begin cnt<=32'd0; state<=CLOSE_DETECT; end
+      
+    THINK:
+     if(cnt<TURN) cnt<=cnt+32'd1;
+     else begin cnt<=32'd0; state<=DECIDE; end
+     
+    DOUBLECOUNT:
+    if(cnt<DOUBLETURN) cnt<=cnt+32'd1;
+      else begin cnt<=32'd0; state<=CLOSE_DETECT; end
+    
+    DECIDE:
+       case({front_detector,back_detector,left_detector,right_detector})
+        4'b0011,4'b0111:  move<=3'b100;
+        4'b1001,4'b1101:beginmove<=3'b010;state<=COUNT;end
+        4'b1011: begin move<=3'b010; state<=DOUBLECOUNT; end
+        4'b1010,4'b1110: begin move<=3'b001;state<=COUNT; end
+        default:beginstate<=WAIT;move<=3'b000;end
+      endcase
+      
+    WAIT:
+      case({go_strait,turn_left,turn_right})
+        3'b100: state<=CLOSE_DETECT;
+        3'b010: begin move<=3'b010; state<=COUNT;end
+        3'b001: begin move<=3'b001; state<=COUNT; end
+      endcase
+    endcase
+   end
+```
+
+## Part 3 (Bonus): Automatic driving
+
+auto_driving.v
+
+> State analysis
+> 
+> Place & Destroy beacon (to UART)
+
+- State used
+
+| Parameter Name | state code  | description                                      |
+|----------------|-------------|--------------------------------------------------|
+| CHECK          | 4'b0001     | Open detector when moving                        |
+| CLOSE_DETECT   | 4'b0010     | Close detector until made choice.                |                           |
+| COUNT          | 4'b0100     | Keep counting when turning.                      |
+| DOUBLECOUNT    | 4'b1111     | Keep counting when turning twice.                |
+| DECIDE         | 4'b0011     | When turning left/right, keep going for a while. |
+| THINK          | 4'b1100     | Stop for a while when auto-turning.              |
+| BACON          | 4'b0101     | Place a new bacon.                               |
+| DESTORY        | 4'b1101     | Collect the last bacon.                          |
+
+- Details
+
+Some details ,like auto-turing, counter and detector, are similar with semi-auto driving mode mentioned above. Find these parts in `Part 2: semi-auto driving`.
+
+When in crossing, it will firstly place a bacon with state `BACON` and then turn `right`. Follow this process and destroy the latest bacon with state `DESTORY` in impasse.   
+
+(Sequential logic)
+```
+ always@(posedge sys_clk)
+        begin
+        case(state)
+        
+    CHECK://...
+    CLOSE_DETECT://...
+    COUNT://...               
+    THINK://...
+    DOUBLECOUNT: //...
+        
+    DECIDE:
+         case({front_detector,back_detector,left_detector,right_detector})
+           begin
+              //... 
+              4'b1010,4'b1110:begin move<=3'b001; state<=BACON; end
+              4'b1001,4'b1101:begin move<=3'b010; state<=BACON; end  
+              4'b1011,4'b1111:begin move<=3'b010; state<=DESTORY; end
+              //...
+               endcase
+    BACON:
+         if(cnt<TURN) begin cnt<=cnt+32'd1; place_barrier_signal<=1'b1; end
+         else begin cnt<=32'd0; place_barrier_signal<=1'b0; state<=CLOSE_DETECT; end
+                                    
+    DESTORY: begin
+        if(cnt<TURN) begin
+            cnt<=cnt+32'd1;
+            move<=3'b000;
+            destroy_barrier_signal<=1'b1;
+          end
+         else begin
+            move<=3'b010;
+            cnt<=32'd0;
+            destroy_barrier_signal<=1'b0; 
+            state<=DOUBLECOUNT;
+         end
+   end
+```
+
+- URAT control signal output
 
 ```
-//TODO ...
+assign control_signal_from_auto={move[2],1'b0,move[1],move[0]};
+assign place_barrier_signal_from_auto=place_barrier_signal;
+assign destroy_barrier_signal_from_auto=destroy_barrier_signal;
+assign state_from_auto=4'b1010;
 ```
+
+## Part 4 (Bonus): VGA
+
+VGA interface
+
+>Task1. VGA available 
+>> Use switch to control VGA to display something.
+> 
+> Task2. use VGA to show the state
+>> Let VGA show the state of the car.
+> 
+> Task3. use VGA to show the Mileage record
+>> Let VGA show the Mileage record. (real-time synchronization)
+
 ---
 
-### · Bonus parts below
-
-## Part 3 Automatic driving
-```
-//TODO ...
-```
-
-## Part 4 VGA
 ```
 //TO BE CONTINUE......
 ```
 
+## Part 5: Summary
 
+> Timeline
+> 
+> Insights
+> 
+> Conclusion
 ---
+
++ Time & version control
+
+![img_4.png](img_4.png)
+
++ Finding & Insights
+
+```
+TODO 
+```
+
++ Conclusion
+
+阿巴阿巴阿巴阿巴阿巴阿巴阿巴阿巴。
