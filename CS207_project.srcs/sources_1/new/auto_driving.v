@@ -21,171 +21,188 @@
 
 
 module auto_driving(
-input [31:0] cnt,
-input [3:0]state,
-output reg [3:0] state_output,
-output [3:0] control_signal_output,
-
-output reg place_barrier_ouput,
-output reg destroy_barrier_ouput,
-
-input [1:0] left_cnt,
-input [1:0] right_cnt,
-output reg [1:0] left_cnt_next,
-output reg [1:0] right_cnt_next,
-
-input front_detector,
-input back_detector,
-input left_detector,
-input right_detector
+input sys_clk, front_detector,back_detector,left_detector,right_detector,
+output [3:0]control_signal_from_auto,
+output place_barrier_signal_from_auto,destroy_barrier_signal_from_auto,
+output [3:0]state_from_auto
     );
-        parameter   AUTO_DRIVING     =   4'b1010;
-        parameter   AUTO_FORWARD     =   4'b1011;
-        parameter   AUTO_TURN_LEFT   =   4'b1100;
-        parameter   AUTO_TURN_RIGHT  =   4'b1101;
-        parameter   AUTO_TURN_BACK   =   4'b1110;
         
-        reg [3:0] next_state;
-        reg [3:0] res;
+        reg [3:0]state;
+        reg [2:0]move;
+        reg [31:0]cnt;
+        reg place_barrier_signal,destroy_barrier_signal;
+        parameter CHECK=4'b0001;
+        parameter CLOSE_DETECT=4'b0010;
+        parameter COUNT=4'b0100;
+        parameter DOUBLECOUNT=4'b0111;
+        parameter DECIDE=4'b0011;
+        parameter THINK=4'b1100;
+        parameter BACON=4'b0101;
+        parameter DESTORY=4'b1101;
         
-        initial begin
-            place_barrier_ouput <= 1'b0;
-            destroy_barrier_ouput <= 1'b0;
-             res <= 4'b0000;
-        end
+        parameter TURN=32'd8000_0000;
+        parameter DOUBLETURN=32'd16000_0000;
+        parameter LAST=32'd4000_0000;
+        parameter THINKTIME=32'd1_0000_0000;
+        initial
+        begin
+        state=CHECK;
+        cnt=32'd0;
+        move=3'b000;
+        place_barrier_signal=1'b0;
+        destroy_barrier_signal=1'b0;
+        end//initial
+         
+        always@(posedge sys_clk)
+        begin
+        case(state)
+CHECK:
+          case({front_detector,back_detector,left_detector,right_detector})
+          4'b0011,4'b0111: 
+          begin
+          move<=3'b100;
+          end
+          
+          default:
+          begin
+          move<=3'b000;
+          state<=THINK;
+          end
+          endcase
         
-        always@(state)begin
-             case(state)
-             AUTO_DRIVING:
-                begin
-                  state_output <= next_state;
-                end
-             AUTO_FORWARD:
-                begin
-                    res <= 4'b1000;
-                    state_output <= next_state;
-                end
-             AUTO_TURN_LEFT:
-                begin
-                    if(cnt > 32'd8000_0000)
+DECIDE:
+         case({front_detector,back_detector,left_detector,right_detector})
+         
+           4'b0011,4'b0111: 
+                 begin
+                 move<=CLOSE_DETECT;
+                 end
+                
+               4'b1010,4'b1110:
                     begin
-                        state_output <= AUTO_DRIVING;
-                        if(cnt < 32'd1_5000_0000)
-                        begin
-                            place_barrier_ouput = 1'b1;
-                            state_output <= AUTO_TURN_LEFT;
-                            res <= 4'b1000;
-                        end
+                    move<=3'b001;
+                    state<=BACON;
                     end
-                    else begin
-                        res <= 4'b0010;
-                        state_output <= AUTO_TURN_LEFT;
-                        place_barrier_ouput = 1'b0;
-                    end
-                end
-              AUTO_TURN_RIGHT:
-                     begin
-                        if(cnt > 32'd8000_0000)
-                         begin
-                             state_output <= AUTO_DRIVING;
-                             if(cnt < 32'd1_5000_0000)
-                             begin
-                                place_barrier_ouput <= 1'b1;
-                                state_output <= AUTO_TURN_LEFT;
-                                res <= 4'b1000;
-                             end
-                         end
-                        else begin
-                             res <= 4'b0001;
-                             state_output <= AUTO_TURN_RIGHT;
-                             place_barrier_ouput = 1'b0;
-                        end
+               
+                
+                 4'b1001,4'b1101:
+                  begin
+                  move<=3'b010;
+                  state<=BACON;
+                  end
+                  
+               4'b1011,4'b1111:
+               begin
+               move<=3'b010;
+               state<=DESTORY;
+               end
+               
+               4'b0000,4'b0010,4'b0100,4'b0110,4'b1000,4'b1100:
+               begin
+               state<=COUNT;
+               move<=3'b001;
+               end
+               
+               4'b0001,4'b0101:
+               begin
+               state<=CLOSE_DETECT;
+               end
+               
+               endcase//DECIDE
+        
+BACON:
+                   if(cnt<TURN)
+                   begin
+                     cnt<=cnt+32'd1;
+                     place_barrier_signal<=1'b1;
                      end
-              AUTO_TURN_BACK:
-                      begin
-                        if(cnt > 32'd1_7000_0000)
-                         begin
-                           state_output <= AUTO_DRIVING;
-                           place_barrier_ouput <= 1'b0;
-                         end
-                        else begin
-                           res <= 4'b0010;
-                           state_output <= AUTO_TURN_BACK;
-                         end
-                      end
-             default : begin
-             state_output <= state;
-             res <= 4'b0000;
-             end
-             endcase
+                     else
+                     begin
+                     cnt<=32'd0;
+                     place_barrier_signal<=1'b0;
+                     state<=CLOSE_DETECT;
+                     end
+                     
+CLOSE_DETECT:
+                     if(cnt<LAST)
+                     begin
+                     move<=3'b100;
+                     cnt<=cnt+32'd1;
+                     end
+                     else
+                     begin
+                     cnt<=32'd0;
+                     state<=CHECK;
+                     end
+                     
+COUNT:
+                     if(cnt<TURN)
+                     cnt<=cnt+32'd1;
+                     else
+                     begin
+                     cnt<=32'd0;
+                     state<=CLOSE_DETECT;
+                     end
+                     
+THINK:
+                    if(cnt<THINKTIME)
+                    begin
+                    cnt<=cnt+32'd1;
+                    move<=3'b000;
+                    end
+                    else
+                    begin
+                    cnt<=32'd0;
+                    move<=3'b000;
+                    state<=DECIDE;
+                    end
+                    
+DOUBLECOUNT:
+                   if(cnt<DOUBLETURN)
+                     cnt<=cnt+32'd1;
+                     else
+                     begin
+                     cnt<=32'd0;
+                     move<=3'b000;
+                     state<=CLOSE_DETECT;
+                     end
+                   
+DESTORY:
+        begin
+        if(cnt<TURN)
+          begin
+          cnt<=cnt+32'd1;
+           move<=3'b000;
+           destroy_barrier_signal<=1'b1;
+           end
+          else
+          begin
+          move<=3'b010;
+          cnt<=32'd0;
+          destroy_barrier_signal<=1'b0; 
+          state<=DOUBLECOUNT;
+          end
         end
+         
+DOUBLECOUNT:
+        if(cnt<DOUBLETURN)
+          cnt<=cnt+32'd1;
+          else
+          begin
+          cnt<=32'd0;
+          move<=3'b000;
+          state<=CLOSE_DETECT;
+          end
+        endcase//state
+        end//always
         
-       always@(front_detector,back_detector,left_detector, right_detector)begin
-            left_cnt_next <= left_cnt;
-            right_cnt_next <= right_cnt;
-            if(state == AUTO_DRIVING || state == AUTO_FORWARD)begin
-            casex({front_detector,back_detector,left_detector, right_detector})
-              4'b1011: begin next_state <= AUTO_TURN_BACK;right_cnt_next = right_cnt + 2'b10; end  // |~|
-              4'b0x11: next_state <= AUTO_FORWARD;   // | |
-              4'b1x01: begin left_cnt_next <= left_cnt + 2'b01; next_state <= AUTO_TURN_LEFT;end   //  <-~~~|
-              4'b1x10: begin right_cnt_next <= right_cnt + 2'b01; next_state <= AUTO_TURN_RIGHT;  end //  |~~~->
-              4'b0110: next_state <= AUTO_FORWARD;   //  |__->
-              4'b0101: next_state <= AUTO_FORWARD;   //   <-__|
-              //belows are in crossing
-              4'b1x00, 4'b0x00,4'b0x01,4'b0x10: begin
-                case(left_cnt^right_cnt)
-                2'b00: // north
-                    begin
-                        if(right_detector)
-                            next_state <= AUTO_FORWARD;
-                        else begin right_cnt_next <= right_cnt + 2'b01; next_state <= AUTO_TURN_RIGHT;end
-                    end
-                2'b10: // south
-                    begin
-                        if(left_detector)
-                          next_state <= AUTO_FORWARD;
-                        else begin left_cnt_next <= left_cnt + 2'b01; next_state <= AUTO_TURN_LEFT;end
-                    end
-                2'b01: 
-                      case({left_cnt,right_cnt})
-                      4'b0001,4'b1011: // east
-                        begin
-                         if(front_detector)
-                           begin left_cnt_next <= left_cnt + 2'b01; next_state <= AUTO_TURN_LEFT;end
-                         else next_state <= AUTO_FORWARD;
-                        end
-                       4'b0100,4'b1110: // west
-                        begin
-                         if(right_detector)
-                            next_state <= AUTO_FORWARD;
-                         else begin right_cnt_next <= right_cnt + 2'b01; next_state <= AUTO_TURN_RIGHT;end
-                        end 
-                      endcase
-                2'b11:
-                    case({left_cnt,right_cnt})
-                       4'b0011,4'b1001: // west
-                          begin
-                             if(right_detector)
-                               next_state <= AUTO_FORWARD;
-                             else begin right_cnt_next <= right_cnt + 2'b01; next_state <= AUTO_TURN_RIGHT;end
-                          end              
-                       4'b0110,4'b1100: // east
-                         begin
-                            if(front_detector)
-                              begin left_cnt_next <= left_cnt + 2'b01; next_state <= AUTO_TURN_LEFT;end
-                            else next_state <= AUTO_FORWARD;
-                         end
-                       endcase
-                endcase
-              end
-              default next_state <= AUTO_FORWARD;      
-            endcase
-            end
-            else begin
-            next_state <= state;
-            end
-        end
-
-assign control_signal_output = res;
+          
+         
+        assign control_signal_from_auto={move[2],1'b0,move[1],move[0]};
+        assign place_barrier_signal_from_auto=place_barrier_signal;
+        assign destroy_barrier_signal_from_auto=destroy_barrier_signal;
+        assign state_from_auto=4'b1010;
+          
+       
 
 endmodule
