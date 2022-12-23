@@ -2,8 +2,8 @@
 
 ## Project: Smart car simulating
 
-- 游俊涛 12110919 : Manual Driving & Auto Driving & Structure design
-- 陶文晖 12111744 : Semi Driving & Auto Driving & VGA
+- 游俊涛 12110919 (50%) :  Manual Driving & Auto Driving & Structure design 
+- 陶文晖 12111744 (50%) :  Semi Driving & Auto Driving & VGA
 
 **[Source code](https://github.com/sustechwifi/CS207_project)**
 
@@ -12,10 +12,14 @@ https://github.com/sustechwifi/CS207_project
 ```
 
 ---
+## Part 0. Overview
 
-## Part 1. Overview
+<img src="img_8.png" alt="img_8.png" style="zoom: 50%;" />
 
-project_impl.v  (top module)
+
+## Part 1. Top module design
+
+project_impl.v  
 
 > Pins & Variables
 > 
@@ -30,25 +34,25 @@ project_impl.v  (top module)
 
 ```
 module project_impl(
-    input sys_clk,
-    input rx, 
-    output tx,
-    input power_on,
-    input power_off,
-    input [2:0] mode,
-    output[3:0] test,
-    input throttle,
-    input brake,
-    input clutch,
-    input reverse_gear_shift,
-    input turn_left,
-    input turn_right,
-    input go_strait,
-    output reg [7:0] seg_en,
-    output [7:0] seg_out0,
-    output [7:0] seg_out1,
-    output direction_left_light,
-    output direction_right_light
+    input sys_clk,                  system clock pulse of 100M Hz.            P17
+    input rx,                       reset signal.                             N5
+    output tx,                      UATL tx output.                           T4          
+    input power_on,                 power-on signal.                          U4              button
+    input power_off,                power-off signal.                         R14             button
+    input [2:0] mode,               select 3 dirving modes.                   {P4,P3,P2}      switch
+    output[3:0] test,               show current state in LED.                {F6,G4.G3,J4}   LED 
+    input throttle,                 throttle signal in manual driving.        R2              switch
+    input brake,                    brake signal in manual driving.           M4              switch
+    input clutch,                   clutch signal in manual driving           N4              switch
+    input reverse_gear_shift,       turn-back signal in manual driving        R1              switch
+    input turn_left,                turn left signal in manual/semi-auto      V1              button
+    input turn_right,               turn right signal in manual/semi-auto     R11             button
+    input go_strait,                go ahead signal in semi-auto driving      R15             button
+    output reg [7:0] seg_en,        mileage tubes enable siganl               {G2-G6}         
+    output [7:0] seg_out0,          right group of mileage tubes              {B4-D5}         7seg-tube
+    output [7:0] seg_out1,          left group of mileage tubes               {D4-H2}         7seg-tube
+    output direction_left_light,    left turn signals when manual driving.    V1              LED
+    output direction_right_light    right turn signals when manual driving.   R11             LED
 );
 ```
 
@@ -67,12 +71,12 @@ module project_impl(
 
     ```
     parameter period = 250000; //400Hz
-    reg [31:0] male;
+    reg [31:0] mile;
     reg [3:0] seg_7;
     reg clkout;
     reg [2:0] scan_cnt;
     reg [31:0] tim;
-    reg [31:0] male_cnt;
+    reg [31:0] mile_cnt;
     ```
 
     + Control signals from automatic state machine
@@ -108,25 +112,7 @@ module project_impl(
 always@(state,mode)
     begin
        casex(state)
-       OFF: 
-            begin          
-            next_state <= OFF;
-            control_signal <= 4'b0000;
-            end
-       ON :
-        begin
-            if(mode == 3'b0)
-                next_state <= ON;
-            else 
-            begin
-             casex(mode)
-               3'b1xx: next_state <= AUTO_DRIVING;
-               3'b01x: next_state <= SEMI_AUTO;
-               3'b001: next_state <= MANUAL_DRIVING_PREPARED;
-               3'bxxx: next_state <= ON;
-              endcase
-            end
-         end
+   OFF & ON://...
          
    MANUAL_DRIVING_PREPARED, MANUAL_DRIVING_STARTING, MANUAL_DRIVING_MOVING :   
        begin 
@@ -154,12 +140,17 @@ end
 
 ### Sub modules
 
+Current `state` in state machine will be the input in each sub-module. And `next_state` and `control_signal` will be updated by sub-module outputs.
+
+If the `state` is not in the work states of a sub-module, the output state in this module will not change. 
+
+- manual_driving.v
 ```
 manual_driving manual(
-    state,
-    state_from_manual,
-    control_signal_from_manual,
-    throttle,
+    state,                         current state in top module.
+    state_from_manual,             output next state from manual-driving.
+    control_signal_from_manual,    output control signal from manual-driving.
+    throttle,                      
     brake,
     clutch,
     reverse_gear_shift,
@@ -169,39 +160,44 @@ manual_driving manual(
     direction_right_light
 );   
 
+```
+
++ semi_auto_driving.v
+```
 semi_auto_driving semi(
    sys_clk, 
-   front_detector,
+   front_detector,                   detector's signal from UART
    back_detector,
    left_detector,
    right_detector, 
-   go_strait,
-   turn_left,turn_right,
-   state_from_semi_auto,
-   control_signal_from_semi_auto
+   go_strait,                        
+   turn_left,
+   turn_right,
+   state_from_semi_auto,              output next state from semi-auto driving.
+   control_signal_from_semi_auto      output control signal from semi-auto driving.
 );
 
+```
+
++ auto_driving.v
+```
 auto_driving auto(
   sys_clk, 
   front_detector,
   back_detector,
   left_detector,
   right_detector,
-  control_signal_from_auto,
-  place_barrier_signal_from_auto,
-  destroy_barrier_signal_from_auto,
-  state_from_auto
+  control_signal_from_auto,                    output control signal from auto driving.
+  place_barrier_signal_from_auto,              output placing barrier signal from auto driving.
+  destroy_barrier_signal_from_auto,            output destroying barrier signal from auto driving.
+  state_from_auto                              output next state from auto driving.
 );
-
-SimulatedDevice utrl(
- //...
-);
-endmodule
 ```
 
++ SimulatedDevice.v 
 ---
 
-## Part 1. Power & Manual Driving
+## Part 2. Power & Manual Driving
 
 project_impl.v &  manual_driving.v
 
@@ -211,8 +207,11 @@ project_impl.v &  manual_driving.v
 > 
 > Turning, Mileage (LED, seg-tubes)
 
-### States used
+### State diagram 
 
+<img src="img_6.png" alt="img_6.png" style="zoom:50%;" />
+
+### States used
 
 | Parameter Name          | state code | description        |
 |-------------------------|------------|--------------------|
@@ -229,30 +228,24 @@ project_impl.v &  manual_driving.v
  Use counter `reg [31:0] cnt` to record single second.
  In this part, state will be updated by `next_state` or clear to `OFF`.
 
+If `cnt` is enough, Change `state` to `ON`.
+
 (Sequential logic)
 ```
 always@(posedge sys_clk or posedge power_off)
-    if (power_off)
-         begin
-          state <= OFF;
-          cnt <= 32'd0;
-         end
-    else if(power_on)
-       begin
+    if (power_off) begin state <= OFF; cnt <= 32'd0; end
+    else if(power_on) 
+     begin
        if(cnt > 32'd1_0000_0000 && state == OFF) 
-          begin
-          state <= ON;
-          cnt <= 32'd0;
-          end
+          begin state <= ON; cnt <= 32'd0; end
        else cnt <= cnt + 32'd1;
-       end
-    else  begin
-    cnt <= 32'd0;
-    state <= next_state;
-end
+     end
+    else  begin cnt <= 32'd0; state <= next_state; end
 ```
 
 ### Throttle, Clutch, Brake control
+
+
 
 - Defined in module `manual_driving`.
 
@@ -265,44 +258,19 @@ always@(state)
     begin
        case(state)
      MANUAL_DRIVING_PREPARED:
-          begin
-              tmp = {throttle,brake,clutch,reverse_gear_shift};
+          begin tmp = {throttle,brake,clutch,reverse_gear_shift};
               res = 1'b0;
               casex(tmp)
                4'b101x:next_state <= MANUAL_DRIVING_STARTING;
                4'b1x0x:next_state <= OFF;
                4'bxxxx:next_state <= MANUAL_DRIVING_PREPARED;
               endcase
-              end  
-      MANUAL_DRIVING_STARTING:
-          begin
-              tmp = {throttle,brake,clutch,reverse_gear_shift};
-              res = 1'b0;
-                casex(tmp)
-                  4'b100x:next_state <= MANUAL_DRIVING_MOVING;
-                  4'b01xx:next_state <= MANUAL_DRIVING_PREPARED;
-                  4'bxxxx:next_state <= MANUAL_DRIVING_STARTING;
-                 endcase
-          end
-       MANUAL_DRIVING_MOVING:
-           begin
-              tmp = {throttle,brake,clutch,reverse_gear_shift};
-              res = 1'b1;
-              casex(tmp)
-               4'b01xx:next_state <= MANUAL_DRIVING_PREPARED;
-               4'b0001:next_state <= OFF;
-               4'b00xx:next_state <= MANUAL_DRIVING_STARTING;
-               4'b0x1x:next_state <= MANUAL_DRIVING_STARTING;
-               4'b1xxx:next_state <= MANUAL_DRIVING_MOVING;
-              endcase
-          end               
-       default: 
-       begin
-       res = 1'b0;
-       next_state <= state; 
-       end
+          end  
+      MANUAL_DRIVING_STARTING: //... omitted
+      MANUAL_DRIVING_MOVING:  //.... omitted 
+      default: begin res = 1'b0; next_state <= state; end
     endcase
-    end
+   end
 ```
 
 ### Mileage record
@@ -310,63 +278,55 @@ always@(state)
 - Defined in top module.
 
 If current state is `MANUAL_DRIVING_MOVING`, mileage variable `reg [32:0] mile` will increase each period.
-`seg_7` will update in each second, which refer the signal of seg-tubes in EGO1.
+
+Using `scan_cnt` to match `period` with 250 Hz, and `mile_cnt` to update mileage every second.
 
 (Sequential logic)
 ```
 always@(posedge sys_clk, negedge rx)
     begin
-        if(~rx)
-        begin
-           male <= 0;
-           clkout <= 0;
-        end
+        if(~rx) begin mile <= 0; clkout <= 0; end
         else 
-          begin
-            case(state)
+     case(state)
         MANUAL_DRIVING_MOVING:
         begin
-            if(male == (period>>1)-1)
+            if(mile == (period>>1)-1)
                begin
                     clkout <= ~ clkout;
-                    male <= 0;
+                    mile <= 0;
                end
-             else if(male_cnt > 32'd1_0000_0000)
+             else if(mile_cnt > 32'd1_0000_0000)
                 begin
-                    male_cnt <= 0;
+                    mile_cnt <= 0;
                     tim <= tim + 1;
                 end
              else 
                 begin
-                    male <= male + 1;
-                    male_cnt <= male_cnt + 1;
+                    mile <= mile + 1;
+                    mile_cnt <= mile_cnt + 1;
                 end
         end
-        default:
-            begin
-                male <= 32'd0;
-                tim <= 0;
-                male_cnt <= 0;
-            end
-        endcase
+        default: begin mile <= 32'd0; tim <= 0; mile_cnt <= 0; end
+      endcase
+    end
+    
+always @(posedge clkout,negedge rx) begin 
+    if(~rx) scan_cnt <= 0;
+        else  begin
+            if(scan_cnt == 3'd7) scan_cnt <= 0;
+            else scan_cnt <= scan_cnt + 3'd1;
         end
     end
+```
 
-always @(posedge clkout,negedge rx)
-    begin
-        if(~rx)
-            scan_cnt <= 0;
-        else 
-            begin
-            if(scan_cnt == 3'd7)
-                scan_cnt <= 0;
-            else
-                scan_cnt <= scan_cnt + 3'd1;
-        end
-    end
-   
-reg [7:0]num;
-   
+
+`reg [7:0] seg_7` will be updated in each second, which refer the signal and show different hexadecimal number of seg-tubes in EGO1.
+
+Using `>>` operator to catch number specific location. e.g, current mile number is `32'd 0000 1145`, `scan_cnt` is `3'b011`. This time only the 3rd is able to light with number 1, we use `mile >> 12` to get the hexadecimal bit `1`.
+
+(Sequential logic)
+```
+reg [7:0]num;  
 always @(scan_cnt)
    begin
         case(scan_cnt)
@@ -374,10 +334,7 @@ always @(scan_cnt)
            3'b001: begin seg_en = 8'h02; num = tim >> 4;  end
            3'b010: begin seg_en = 8'h04; num = tim >> 8;  end
            3'b011: begin seg_en = 8'h08; num = tim >> 12; end
-           3'b100: begin seg_en = 8'h10; num = tim >> 16; end
-           3'b101: begin seg_en = 8'h20; num = tim >> 20; end
-           3'b110: begin seg_en = 8'h40; num = tim >> 24; end
-           3'b111: begin seg_en = 8'h80; num = tim >> 28; end
+           //...omitted
             default : seg_en = 8'h00;
         endcase
 end
@@ -392,7 +349,7 @@ light_7seg_ego1 l2({1'b0,num},seg_out1,useless_seg_en1);
 
 - Defined in module `manual_driving`
 
-In this part, gate-level circuits is used to update `direction_left_light` and `direction_right_light`,which connect in LED signal. And `wire [3:0] control_output` is used for `URAT` module controlling.
+In this part, gate-level circuits is used to update `direction_left_light` and `direction_right_light`,which connect in LED signal. And `wire [3:0] control_output` is used for `UART` module controlling.
 
 (Combinatorial logic)
 
@@ -403,7 +360,7 @@ assign control_output = {res & ~reverse_gear_shift,res & reverse_gear_shift,turn
 ```
 
 
-## Part 2: Semi-auto driving
+## Part 3. Semi-auto driving
 
 semi_auto_driving.v
 
@@ -412,6 +369,11 @@ semi_auto_driving.v
 > Semi-auto driving command (multi button)
 
 ---
+
+- State diagram
+
+<img src="img_7.png" alt="img_7.png" style="zoom:50%;" />
+
 
 - States used
 
@@ -450,21 +412,10 @@ always@(posedge sys_clk)
       default: begin state<=WAIT; move<=3'b000; end
       endcase
       
-    CLOSE_DETECT:
-      if(cnt<LAST) begin move<=3'b100; cnt<=cnt+32'd1; end
-      else begin cnt<=32'd0; state<=CHECK;end
-      
-    COUNT:
-      if(cnt<TURN) cnt<=cnt+32'd1;
-      else begin cnt<=32'd0; state<=CLOSE_DETECT; end
-      
-    THINK:
-     if(cnt<TURN) cnt<=cnt+32'd1;
-     else begin cnt<=32'd0; state<=DECIDE; end
-     
-    DOUBLECOUNT:
-    if(cnt<DOUBLETURN) cnt<=cnt+32'd1;
-      else begin cnt<=32'd0; state<=CLOSE_DETECT; end
+    CLOSE_DETECT: //... omitted
+    COUNT: //... omitted
+    THINK: //... omitted
+    DOUBLECOUNT: //... omitted
     
     DECIDE:
        case({front_detector,back_detector,left_detector,right_detector})
@@ -475,17 +426,12 @@ always@(posedge sys_clk)
         default:beginstate<=WAIT;move<=3'b000;end
       endcase
       
-    WAIT:
-      case({go_strait,turn_left,turn_right})
-        3'b100: state<=CLOSE_DETECT;
-        3'b010: begin move<=3'b010; state<=COUNT;end
-        3'b001: begin move<=3'b001; state<=COUNT; end
-      endcase
+    WAIT: //... omitted
     endcase
    end
 ```
 
-## Part 3 (Bonus): Automatic driving
+## Part 3 (Bonus). Automatic driving
 
 auto_driving.v
 
@@ -503,14 +449,14 @@ auto_driving.v
 | DOUBLECOUNT    | 4'b1111     | Keep counting when turning twice.                |
 | DECIDE         | 4'b0011     | When turning left/right, keep going for a while. |
 | THINK          | 4'b1100     | Stop for a while when auto-turning.              |
-| BACON          | 4'b0101     | Place a new bacon.                               |
-| DESTORY        | 4'b1101     | Collect the last bacon.                          |
+| BEACON         | 4'b0101     | Place a new beacon.                              |
+| DESTORY        | 4'b1101     | Collect the last beacon.                         |
 
 - Details
 
 Some details ,like auto-turing, counter and detector, are similar with semi-auto driving mode mentioned above. Find these parts in `Part 2: semi-auto driving`.
 
-When in crossing, it will firstly place a bacon with state `BACON` and then turn `right`. Follow this process and destroy the latest bacon with state `DESTORY` in impasse.   
+When in crossing, it will firstly place a beacon with state `beacon` and then turn `right`. Follow this process and destroy the latest beacon with state `DESTORY` in impasse.   
 
 (Sequential logic)
 ```
@@ -527,28 +473,19 @@ When in crossing, it will firstly place a bacon with state `BACON` and then turn
     DECIDE:
          case({front_detector,back_detector,left_detector,right_detector})
            begin
-              //... 
-              4'b1010,4'b1110:begin move<=3'b001; state<=BACON; end
-              4'b1001,4'b1101:begin move<=3'b010; state<=BACON; end  
+              //... omitted
+              4'b1010,4'b1110:begin move<=3'b001; state<=beacon; end
+              4'b1001,4'b1101:begin move<=3'b010; state<=beacon; end  
               4'b1011,4'b1111:begin move<=3'b010; state<=DESTORY; end
-              //...
+              //... omitted
                endcase
-    BACON:
+    beacon:
          if(cnt<TURN) begin cnt<=cnt+32'd1; place_barrier_signal<=1'b1; end
          else begin cnt<=32'd0; place_barrier_signal<=1'b0; state<=CLOSE_DETECT; end
                                     
     DESTORY: begin
-        if(cnt<TURN) begin
-            cnt<=cnt+32'd1;
-            move<=3'b000;
-            destroy_barrier_signal<=1'b1;
-          end
-         else begin
-            move<=3'b010;
-            cnt<=32'd0;
-            destroy_barrier_signal<=1'b0; 
-            state<=DOUBLECOUNT;
-         end
+        if(cnt<TURN) begin cnt<=cnt+32'd1; move<=3'b000; destroy_barrier_signal<=1'b1; end
+        else begin move<=3'b010; cnt<=32'd0; destroy_barrier_signal<=1'b0; state<=DOUBLECOUNT; end
    end
 ```
 
@@ -561,7 +498,7 @@ assign destroy_barrier_signal_from_auto=destroy_barrier_signal;
 assign state_from_auto=4'b1010;
 ```
 
-## Part 4 (Bonus): VGA
+## Part 4 (Bonus). VGA
 
 VGA interface
 
@@ -580,7 +517,7 @@ VGA interface
 //TO BE CONTINUE......
 ```
 
-## Part 5: Summary
+## Part 5. Summary
 
 > Timeline
 > 
@@ -591,7 +528,7 @@ VGA interface
 
 + Time & version control
 
-![img_4.png](img_4.png)
+<img src="img_4.png" alt="img_4.png" style="zoom:50%;" />
 
 + Finding & Insights
 
