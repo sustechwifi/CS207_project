@@ -162,21 +162,25 @@ module project_impl(
         end
     end
    
-   reg [7:0]num;
-   
+   reg [3:0]num;
+   reg [3:0] mile_0, mile_1, mile_2, mile_3, mile_4, mile_5, mile_6, mile_7;
+   reg [31:0] VGA_signal;
    always @(scan_cnt)
    begin
+        mile_0 = tim; mile_1 = tim >> 4;mile_2 = tim >> 8;mile_3 = tim >> 12;mile_4 = tim >> 16;
+        mile_5 = tim >> 20;mile_6 = tim >> 24; mile_7 = tim >> 28;
         case(scan_cnt)
         3'b000: begin seg_en = 8'h01; num = tim ;end
         3'b001: begin seg_en = 8'h02; num = tim >> 4; end
         3'b010: begin seg_en = 8'h04; num = tim >> 8; end
-        3'b011: begin seg_en = 8'h08; num = tim >> 12; end
+        3'b011: begin seg_en = 8'h08; num = tim >> 12;end
         3'b100: begin seg_en = 8'h10; num = tim >> 16;end
         3'b101: begin seg_en = 8'h20; num = tim >> 20;end
         3'b110: begin seg_en = 8'h40; num = tim >> 24;end
         3'b111: begin seg_en = 8'h80; num = tim >> 28;end
         default : seg_en = 8'h00;
         endcase
+        VGA_signal = {mile_7,mile_6,mile_5,mile_4,mile_3,mile_2,mile_1,mile_0};
    end
    
   //×´Ì¬»ú
@@ -227,9 +231,8 @@ module project_impl(
 
 assign test = state;
 wire [7:0] useless_seg_en0, useless_seg_en1;
-
-light_7seg_ego1 l1({1'b0,num},seg_out0,useless_seg_en0);
-light_7seg_ego1 l2({1'b0,num},seg_out1,useless_seg_en1);
+light_7seg_ego1 l1(num,seg_out0,useless_seg_en0);
+light_7seg_ego1 l2(num,seg_out1,useless_seg_en1);
 
 manual_driving manual(
     state,
