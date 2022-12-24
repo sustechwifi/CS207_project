@@ -45,7 +45,14 @@ module project_impl(
     output [7:0] seg_out1,
     
     output direction_left_light,
-    output direction_right_light
+    output direction_right_light,
+    
+    input contrl,
+    output reg [3:0]r,
+    output reg [3:0]g,
+    output reg [3:0]b,
+    output reg hs,
+    output reg vs
     );
 
     parameter   OFF    =   4'b0000;
@@ -55,7 +62,7 @@ module project_impl(
     parameter   MANUAL_DRIVING_MOVING     =   4'b0100;
     parameter   SEMI_AUTO     =   4'b0101;
     parameter   AUTO_DRIVING     =   4'b1010;
-
+    
     
     reg [31:0] cnt = 0;
     reg [3:0] state,next_state; 
@@ -82,7 +89,44 @@ module project_impl(
     reg destroy_barrier_signal;
     wire place_barrier_signal_from_auto;
     wire destroy_barrier_signal_from_auto;
-   
+    
+   reg [2:0]num;
+   reg [2:0] mile_0, mile_1, mile_2, mile_3, mile_4, mile_5, mile_6, mile_7;
+   wire [23:0] VGA_signal;
+   wire [3:0]r1;
+   wire [3:0]r2;
+   wire [3:0]g1;
+   wire [3:0]g2;
+   wire [3:0]b1;
+   wire [3:0]b2;
+   wire vs1;
+   wire vs2;
+   wire hs1;
+   wire hs2;
+   always@(sys_clk)
+   begin
+   if(contrl)
+   begin
+   r<=r1;
+   g<=g1;
+   b<=b1;
+   vs<=vs1;
+   hs<=hs1;
+   end
+   else
+   begin
+   r<=r2;
+   g<=g2;
+   b<=b2;
+   vs<=vs2;
+   hs<=hs2;
+   end
+   end
+   vga_char_display vga (sys_clk,state,r1,g1,b1,hs1,vs1);
+   vga_miles miles (sys_clk,{VGA_signal[2],VGA_signal[1],VGA_signal[0]},{VGA_signal[5],VGA_signal[4],VGA_signal[3]},
+   {VGA_signal[8],VGA_signal[7],VGA_signal[6]},{VGA_signal[11],VGA_signal[10],VGA_signal[9]},
+   {VGA_signal[14],VGA_signal[13],VGA_signal[12]},{VGA_signal[17],VGA_signal[16],VGA_signal[15]}
+   ,{VGA_signal[20],VGA_signal[19],VGA_signal[18]},{VGA_signal[23],VGA_signal[22],VGA_signal[21]},r2,g2,b2,hs2,vs2);
     initial begin
     male = 32'd0;
     seg_7 = 4'b0000;
@@ -162,27 +206,25 @@ module project_impl(
         end
     end
    
-   reg [3:0]num;
-   reg [3:0] mile_0, mile_1, mile_2, mile_3, mile_4, mile_5, mile_6, mile_7;
-   reg [31:0] VGA_signal;
+  
    always @(scan_cnt)
    begin
-        mile_0 = tim; mile_1 = tim >> 4;mile_2 = tim >> 8;mile_3 = tim >> 12;mile_4 = tim >> 16;
-        mile_5 = tim >> 20;mile_6 = tim >> 24; mile_7 = tim >> 28;
+        mile_0 = tim; mile_1 = tim >> 3;mile_2 = tim >> 6;mile_3 = tim >> 9;mile_4 = tim >> 12;
+        mile_5 = tim >> 15;mile_6 = tim >> 18; mile_7 = tim >> 21;
         case(scan_cnt)
         3'b000: begin seg_en = 8'h01; num = tim ;end
-        3'b001: begin seg_en = 8'h02; num = tim >> 4; end
-        3'b010: begin seg_en = 8'h04; num = tim >> 8; end
-        3'b011: begin seg_en = 8'h08; num = tim >> 12;end
-        3'b100: begin seg_en = 8'h10; num = tim >> 16;end
-        3'b101: begin seg_en = 8'h20; num = tim >> 20;end
-        3'b110: begin seg_en = 8'h40; num = tim >> 24;end
-        3'b111: begin seg_en = 8'h80; num = tim >> 28;end
+        3'b001: begin seg_en = 8'h02; num = tim >> 3; end
+        3'b010: begin seg_en = 8'h04; num = tim >> 6; end
+        3'b011: begin seg_en = 8'h08; num = tim >> 9;end
+        3'b100: begin seg_en = 8'h10; num = tim >> 12;end
+        3'b101: begin seg_en = 8'h20; num = tim >> 15;end
+        3'b110: begin seg_en = 8'h40; num = tim >> 18;end
+        3'b111: begin seg_en = 8'h80; num = tim >> 21;end
         default : seg_en = 8'h00;
         endcase
-        VGA_signal = {mile_7,mile_6,mile_5,mile_4,mile_3,mile_2,mile_1,mile_0};
+        
    end
-   
+   assign VGA_signal = {mile_7,mile_6,mile_5,mile_4,mile_3,mile_2,mile_1,mile_0};
   //×´Ì¬»ú
     always@(state,mode)
     begin
@@ -231,8 +273,8 @@ module project_impl(
 
 assign test = state;
 wire [7:0] useless_seg_en0, useless_seg_en1;
-light_7seg_ego1 l1(num,seg_out0,useless_seg_en0);
-light_7seg_ego1 l2(num,seg_out1,useless_seg_en1);
+light_7seg_ego1 l1({1'b0,num},seg_out0,useless_seg_en0);
+light_7seg_ego1 l2({1'b0,num},seg_out1,useless_seg_en1);
 
 manual_driving manual(
     state,
