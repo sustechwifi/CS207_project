@@ -21,13 +21,13 @@
 
 
 module semi_auto_driving(
-input sys_clk, front_detector,back_detector,left_detector,right_detector, go_strait,turn_left,turn_right,
+input sys_clk, front_detector,back_detector,left_detector,right_detector, go_strait,turn_left,turn_right,go_back,
 output [3:0] state_output,
 output [3:0] control_signal_from_semi_auto
     );
     
     reg [3:0]state;
-    reg [2:0]move;
+    reg [3:0]move;
     reg [31:0]cnt;
     parameter WAIT=3'b000;
     parameter CHECK=3'b001;
@@ -37,7 +37,7 @@ output [3:0] control_signal_from_semi_auto
     parameter DECIDE=3'b011;
     parameter THINK=3'b110;
     parameter TURN=32'd8000_0000;
-    parameter DOUBLETURN=32'd1_6000_0000;
+    parameter DOUBLETURN=32'd1_7000_0000;
     parameter LAST=32'd4000_0000;
     parameter SEMI_AUTO = 4'b0101;
     
@@ -53,26 +53,26 @@ output [3:0] control_signal_from_semi_auto
       case({front_detector,back_detector,left_detector,right_detector})
       4'b0011,4'b0111: 
       begin
-      move<=3'b100;
+      move<=4'b1000;
       end
       
       4'b1001,4'b1101, 4'b1011, 4'b1010,4'b1110:
       begin
-      move<=3'b000;
+      move<=4'b0000;
       state<=THINK;
       end
       
       default:
       begin
       state<=WAIT;
-      move<=3'b000;
+      move<=4'b0000;
       end
       endcase
       
     CLOSE_DETECT:
       if(cnt<LAST)
       begin
-      move<=3'b100;
+      move<=4'b1000;
       cnt<=cnt+32'd1;
       end
       else
@@ -112,50 +112,56 @@ output [3:0] control_signal_from_semi_auto
        case({front_detector,back_detector,left_detector,right_detector})
      4'b0011,4'b0111: 
      begin
-     move<=3'b100;
+     move<=4'b1000;
      end
      
      4'b1001,4'b1101:
      begin
-     move<=3'b010;
+     move<=4'b0010;
      state<=COUNT;
      end
      
      4'b1011:
     begin
-    move<=3'b010;
+    move<=4'b0010;
     state<=DOUBLECOUNT;
     end
      
      4'b1010,4'b1110:
       begin
-      move<=3'b001;
+      move<=4'b0001;
       state<=COUNT;
       end
       
     default:
         begin
         state<=WAIT;
-        move<=3'b000;
+        move<=4'b0000;
         end
         endcase
     WAIT:
-      case({go_strait,turn_left,turn_right})
-      3'b100: 
+      case({go_strait,turn_left,turn_right,go_back})
+      4'b1000: 
       begin
       state<=CLOSE_DETECT;
       end
       
-      3'b010:
+      4'b0100:
       begin
-        move<=3'b010;
+        move<=4'b0010;
         state<=COUNT;
       end
     
-      3'b001:
+      4'b0010:
       begin
-       move<=3'b001;
+       move<=4'b0001;
        state<=COUNT;
+      end
+      
+      4'b0001:
+      begin
+      move<=4'b0010;
+      state<=DOUBLECOUNT;
       end
       
       endcase//wait
@@ -164,6 +170,6 @@ output [3:0] control_signal_from_semi_auto
     end//always
       
      
-       assign control_signal_from_semi_auto={move[2],1'b0,move[1],move[0]};
+       assign control_signal_from_semi_auto=move;
        assign state_output=4'b0101;
        endmodule

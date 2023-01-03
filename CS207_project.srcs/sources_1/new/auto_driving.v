@@ -31,6 +31,7 @@ output [3:0]state_from_auto
         reg [2:0]move;
         reg [31:0]cnt;
         reg place_barrier_signal,destroy_barrier_signal;
+        reg [2:0]t;
         parameter CHECK=4'b0001;
         parameter CLOSE_DETECT=4'b0010;
         parameter COUNT=4'b0100;
@@ -41,7 +42,7 @@ output [3:0]state_from_auto
         parameter DESTORY=4'b1101;
         
         parameter TURN=32'd8000_0000;
-        parameter DOUBLETURN=32'd16000_0000;
+        parameter DOUBLETURN=32'd17000_0000;
         parameter LAST=32'd4000_0000;
         parameter THINKTIME=32'd1_0000_0000;
         initial
@@ -51,6 +52,7 @@ output [3:0]state_from_auto
         move=3'b000;
         place_barrier_signal=1'b0;
         destroy_barrier_signal=1'b0;
+        t=3'b000;
         end//initial
          
         always@(posedge sys_clk)
@@ -94,12 +96,12 @@ DECIDE:
                4'b1011,4'b1111:
                begin
                move<=3'b010;
-               state<=DESTORY;
+               state<=DOUBLECOUNT;
                end
                
                4'b0000,4'b0010,4'b0100,4'b0110,4'b1000,4'b1100:
                begin
-               state<=COUNT;
+               state<=BACON;
                move<=3'b001;
                end
                
@@ -156,33 +158,30 @@ THINK:
                     move<=3'b000;
                     state<=DECIDE;
                     end
-                    
-DOUBLECOUNT:
-                   if(cnt<DOUBLETURN)
-                     cnt<=cnt+32'd1;
-                     else
-                     begin
-                     cnt<=32'd0;
-                     move<=3'b000;
-                     state<=CLOSE_DETECT;
-                     end
+                   
                    
 DESTORY:
+        if(t==3'b100)
+        begin
+         t<=1'b0;
+         destroy_barrier_signal<=1'b0;
+         state<=CLOSE_DETECT;
+        end
+        else
         begin
         if(cnt<TURN)
           begin
           cnt<=cnt+32'd1;
            move<=3'b000;
-           destroy_barrier_signal<=1'b1;
            end
           else
           begin
-          move<=3'b010;
           cnt<=32'd0;
-          destroy_barrier_signal<=1'b0; 
-          state<=DOUBLECOUNT;
-          end
-        end
+          destroy_barrier_signal<=~destroy_barrier_signal; 
+          t<=t+1'b1;
+          end//cnt
+         end//t<4
+        
          
 DOUBLECOUNT:
         if(cnt<DOUBLETURN)
@@ -191,7 +190,7 @@ DOUBLECOUNT:
           begin
           cnt<=32'd0;
           move<=3'b000;
-          state<=CLOSE_DETECT;
+          state<=DESTORY;
           end
         endcase//state
         end//always

@@ -32,7 +32,7 @@ module vga_miles(
     output vs
     );
 
-	// ÏÔÊ¾Æ÷¿ÉÏÔÊ¾ÇøÓò
+	// æ˜¾ç¤ºå™¨å¯æ˜¾ç¤ºåŒºåŸŸ
 	parameter UP_BOUND = 32'd31;
 	parameter DOWN_BOUND = 32'd510;
 	parameter LEFT_BOUND = 32'd144;
@@ -59,7 +59,7 @@ number number4(mile_4,pclk,vcount-32'd168,hcount-32'd376,exist4);
 number number5(mile_5,pclk,vcount-32'd168,hcount-32'd304,exist5);
 number number6(mile_6,pclk,vcount-32'd168,hcount-32'd232,exist6);
 number number7(mile_7,pclk,vcount-32'd168,hcount-32'd160,exist7);
-	// ÉèÖÃÏÔÊ¾ÐÅºÅÖµ
+	// è®¾ç½®æ˜¾ç¤ºä¿¡å·å€¼
 	always @ (posedge pclk)
 	begin
     if(vcount>32'd168&&vcount<32'd312&&hcount>32'd160&&hcount<32'd232)
@@ -121,14 +121,14 @@ end
 end//always
  
 	assign {r,g,b}=rgb;
-	// »ñµÃÏñËØÊ±ÖÓ25MHz
+	// èŽ·å¾—åƒç´ æ—¶é’Ÿ25MHz
 	assign pclk = count[1];
 	always @ (posedge clk)
 	begin
 			count <= count+1'b1;
 	end
 	
-	// ÁÐ¼ÆÊýÓëÐÐÍ¬²½
+	// åˆ—è®¡æ•°ä¸Žè¡ŒåŒæ­¥
 	assign hs = (hcount < 32'd96) ? 1'b0 : 1'b1;
 	always @ (posedge pclk)
 	begin
@@ -138,7 +138,7 @@ end//always
 			hcount <= hcount+1'b1;
 	end
 	
-	// ÐÐ¼ÆÊýÓë³¡Í¬²½
+	// è¡Œè®¡æ•°ä¸ŽåœºåŒæ­¥
 	assign vs = (vcount < 32'd2) ? 1'b0 : 1'b1;
 	always @ (posedge pclk)
 	begin
@@ -152,3 +152,5 @@ end//always
 
 endmodule
  
+
+

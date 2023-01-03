@@ -137,7 +137,7 @@ module project_impl(
     destroy_barrier_signal <= 1'b0;
     end
     
-    //¿ª¹Ø
+    //å¼€å…³
     always@(posedge sys_clk or posedge power_off)
         if (power_off)
              begin
@@ -159,14 +159,9 @@ module project_impl(
         end
     
     
-    //Àï³ÌÊý
-    always@(posedge sys_clk, negedge rx)
+    //é‡Œç¨‹æ•°
+    always@(posedge sys_clk)
         begin
-            if(~rx)begin
-               male <= 0;
-               clkout <= 0;
-            end
-            else begin
             case(state)
             MANUAL_DRIVING_MOVING:
             begin
@@ -185,18 +180,34 @@ module project_impl(
                  male_cnt <= male_cnt + 1;
                  end
             end
-            default:begin
+            OFF:begin
             male <= 32'd0;
             tim <= 0;
             male_cnt <= 0;
             end
+            default:
+            begin
+                            if(male == (period>>1)-1)
+                               begin
+                               clkout <= ~ clkout;
+                               male <= 0;
+                               end
+                             else if(male_cnt > 32'd1_0000_0000)
+                                begin
+                                male_cnt <= 0;
+                                end
+                             else begin
+                             male <= male + 1;
+                             male_cnt <= male_cnt + 1;
+                             end
+                        end
             endcase
             end
-        end
+     
 
-    always @(posedge clkout,negedge rx)
+    always @(negedge clkout)
     begin
-        if(~rx)
+        if(state==OFF)
             scan_cnt <= 0;
         else begin
             if(scan_cnt == 3'd7)
@@ -225,7 +236,7 @@ module project_impl(
         
    end
    assign VGA_signal = {mile_7,mile_6,mile_5,mile_4,mile_3,mile_2,mile_1,mile_0};
-  //×´Ì¬»ú
+  //çŠ¶æ€æœº
     always@(state,mode)
     begin
        casex(state)
@@ -286,6 +297,7 @@ manual_driving manual(
     reverse_gear_shift,
     turn_left,
     turn_right,
+    sys_clk,
     direction_left_light,
     direction_right_light
 );   
@@ -297,7 +309,7 @@ auto_driving auto(
 );
 
 semi_auto_driving semi(
-   sys_clk, front_detector,back_detector,left_detector,right_detector, go_strait,turn_left,turn_right,
+   sys_clk, front_detector,back_detector,left_detector,right_detector, go_strait,turn_left,turn_right,reverse_gear_shift,
    state_from_semi_auto,
    control_signal_from_semi_auto
 );
@@ -307,10 +319,10 @@ SimulatedDevice main(
     sys_clk,
     rx,
     tx,
-    control_signal[1],  //×ó
-    control_signal[0],  //ÓÒ
-    control_signal[3],  //Ç°
-    control_signal[2],  //ºó
+    control_signal[1],  //å·¦
+    control_signal[0],  //å³
+    control_signal[3],  //å‰
+    control_signal[2],  //åŽ
     place_barrier_signal,
     destroy_barrier_signal,
     front_detector,

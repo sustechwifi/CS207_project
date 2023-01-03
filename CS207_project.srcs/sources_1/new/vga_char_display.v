@@ -11,7 +11,7 @@ module vga_char_display(
     output  vs
     );
 
-	// ÏÔÊ¾Æ÷¿ÉÏÔÊ¾ÇøÓò
+	// æ˜¾ç¤ºå™¨å¯æ˜¾ç¤ºåŒºåŸŸ
 	parameter UP_BOUND = 32'd31;
 	parameter DOWN_BOUND = 32'd510;
 	parameter LEFT_BOUND = 32'd144;
@@ -128,7 +128,7 @@ end
 
 
 
-	// ÉèÖÃÏÔÊ¾ĞÅºÅÖµ
+	// è®¾ç½®æ˜¾ç¤ºä¿¡å·å€¼
 	always @ (posedge pclk)
 	begin
 	case(state)
@@ -198,14 +198,14 @@ end
 
 	assign {r,g,b}=rgb;
 
-	// »ñµÃÏñËØÊ±ÖÓ25MHz
+	// è·å¾—åƒç´ æ—¶é’Ÿ25MHz
 	assign pclk = count[1];
 	always @ (posedge clk)
 	begin
 			count <= count+1'b1;
 	end
 	
-	// ÁĞ¼ÆÊıÓëĞĞÍ¬²½
+	// åˆ—è®¡æ•°ä¸è¡ŒåŒæ­¥
 	assign hs = (hcount < 32'd96) ? 1'b0 : 1'b1;
 	always @ (posedge pclk)
 	begin
@@ -215,7 +215,7 @@ end
 			hcount <= hcount+1'b1;
 	end
 	
-	// ĞĞ¼ÆÊıÓë³¡Í¬²½
+	// è¡Œè®¡æ•°ä¸åœºåŒæ­¥
 	assign vs = (vcount < 32'd2) ? 1'b0 : 1'b1;
 	always @ (posedge pclk)
 	begin
